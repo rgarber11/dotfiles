@@ -259,9 +259,10 @@ require('lazy').setup({
     },
   },
   {
-    "nvim-neorg/neorg",
+    "rgarber11/neorg",
     build = ":Neorg sync-parsers",
     dependencies = { "nvim-lua/plenary.nvim" },
+    branch = 'main',
     config = function()
       require("neorg").setup {
         load = {
