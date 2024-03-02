@@ -282,7 +282,6 @@ require('lazy').setup({
           -- ["core.ui.calendar"] = {},
           ["core.ui"] = {},
           ["core.neorgcmd"] = {},
-          ["core.neorgcmd.commands.module.list"] = {},
           ["core.export"] = {
             config = {
               export_dir = "<export-dir>/<language>-export",
