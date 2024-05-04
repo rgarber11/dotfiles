@@ -6,6 +6,9 @@ import socket
 import subprocess
 import sys
 
+# NOTE: THIS COPIES CODE FROM nwg-piotr/nwg-panel. While I prefer my implementation of this to his,
+# know that I stand on the shoulders of giants.
+
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
