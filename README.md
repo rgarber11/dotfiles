@@ -1,4 +1,4 @@
-# dotfiles
+# Dotfiles
 
 All of my dotfiles
 
@@ -8,4 +8,4 @@ All of my dotfiles
 4. **NWG-Dock-Hyprland**, **Anyrun**: Mostly cosmetic changes to make them _solarized_
 5. **Kitty** is my current terminal. I have not changed much, aside from using a solarized theme.
 6. **Alacritty** is my backup terminal. All I've done is changed themes.
-7. **Zsh**: My `.zshrc` is a mess, and needs updating. Overall, the only thing in here that I'd keep is my comment formatting script for copying into Jupyter Notebooks, and my script that gives me a cowsay fortune, with proper split on English and Russian Fortunes (note: The in-built `fortune -n 30% a -n 70% b` did not work for me.) Hopefully will be editing this down soon:tm:
+7. **Zsh**: My `.zshrc` is a mess, and needs updating. Overall, the only thing in here that I'd keep is my comment formatting script for copying into Jupyter Notebooks, and my script that gives me a cowsay fortune, with proper split on English and Russian Fortunes (note: The in-built `fortune -n 30% a -n 70% b` did not work for me.) Hopefully will be editing this down soon. :tm:
