@@ -132,7 +132,9 @@ rehash_precmd() {
 function format_python_comment() {
 echo "$1" | fmt -78 | sed "s/.*/# \0/"
 }
-
+sdiff() {
+  diff --color=always -- "$1" "$2" | less -R
+}
 add-zsh-hook -Uz precmd rehash_precmd
 set -o extendedglob
 export VCPKG_ROOT=/home/rgarber11/.local/bin/vcpkg
