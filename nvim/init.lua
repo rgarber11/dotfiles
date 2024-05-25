@@ -480,7 +480,7 @@ local servers = {
 			telemetry = { enable = false },
 		},
 	},
-	pyright = {},
+	basedpyright = {},
 	texlab = {},
 }
 
@@ -556,6 +556,7 @@ cmp.setup({
 		{ name = "luasnip" },
 	},
 })
+require("haskell")
 vim.opt.expandtab = true
 vim.opt.smarttab = true
 -- require 'norg-latex'
