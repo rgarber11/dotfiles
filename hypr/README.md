@@ -7,16 +7,19 @@
 
 ## Uses:
 
+- Anyrun
+- Caffeine-NG
+- Chromium
+- Cliphist
+- Dolphin
+- Grimblast
 - Hypridle
 - Hyprlock
 - KWallet, KDE-Polkit
+- Kitty
+- Nwg-Dock-Hyprland
+- Nwg-Monitors
+- Nwg-panel
 - Swaybg
 - Swaync
-- Nwg-dock-hyprland
-- Nwg-panel
-- Nwg-Monitors
-- caffeine-ng
-- Cliphist
-- Dolphin
-- Anyrun
-- Kitty
+- Tesseract
