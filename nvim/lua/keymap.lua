@@ -68,11 +68,16 @@ end, "[W]orkspace [L]ist Folders")
 vim.keymap.set("n", "<leader>p", require("nabla").popup, { noremap = true, desc = "Open Nabla Popup" })
 vim.keymap.set("n", "<leader>nt", require("nabla").toggle_virt, { noremap = true, desc = "Toggle Nabla Virt" })
 vim.keymap.set("n", "<leader>nr", function()
-    vim.cmd "Ex"
-end, { noremap = true, desc = "Open NetRw" })
+    require("oil").open()
+end, { noremap = true, desc = "Open Oil" })
 vim.keymap.set("n", "<leader>ns", function()
-    vim.cmd "Sex"
-end, { noremap = true, desc = "Split Side NetRw" })
+    vim.cmd "split"
+    require("oil").open()
+end, { noremap = true, desc = "Split Side Oil" })
 vim.keymap.set("n", "<leader>nv", function()
-    vim.cmd "Vex"
+    vim.cmd "vsplit"
+    require("oil").open()
 end, { noremap = true, desc = "Split Vertical NetRw" })
+vim.keymap.set("n", "<leader>no", function()
+    require("oil").open_float()
+end, { noremap = true, desc = "Open Oil in Hover Mode" })
