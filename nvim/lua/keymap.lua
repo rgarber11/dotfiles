@@ -7,24 +7,14 @@ vim.keymap.set("n", "<C-h>", "<C-w><C-h>", { desc = "Move focus to the left wind
 vim.keymap.set("n", "<C-l>", "<C-w><C-l>", { desc = "Move focus to the right window" })
 vim.keymap.set("n", "<C-j>", "<C-w><C-j>", { desc = "Move focus to the lower window" })
 vim.keymap.set("n", "<C-k>", "<C-w><C-k>", { desc = "Move focus to the upper window" })
-require("telescope").setup({
-	defaults = {
-		mappings = {
-			i = {
-				["<C-u>"] = false,
-				["<C-d>"] = false,
-			},
-		},
-	},
-})
 vim.keymap.set("n", "<leader>?", require("telescope.builtin").oldfiles, { desc = "[?] Find recently opened files" })
 vim.keymap.set("n", "<leader><space>", require("telescope.builtin").buffers, { desc = "[ ] Find existing buffers" })
 vim.keymap.set("n", "<leader>/", function()
-	-- You can pass additional configuration to telescope to change theme, layout, etc.
-	require("telescope.builtin").current_buffer_fuzzy_find(require("telescope.themes").get_dropdown({
-		winblend = 10,
-		previewer = false,
-	}))
+    -- You can pass additional configuration to telescope to change theme, layout, etc.
+    require("telescope.builtin").current_buffer_fuzzy_find(require("telescope.themes").get_dropdown({
+        winblend = 10,
+        previewer = false,
+    }))
 end, { desc = "[/] Fuzzily search in current buffer" })
 
 vim.keymap.set("n", "<leader>gf", require("telescope.builtin").git_files, { desc = "Search [G]it [F]iles" })
@@ -46,11 +36,11 @@ vim.keymap.set("n", "<leader>e", vim.diagnostic.open_float, { desc = "Open float
 vim.keymap.set("n", "<leader>q", vim.diagnostic.setloclist, { desc = "Open diagnostics list" })
 
 local nmap = function(keys, func, desc)
-	if desc then
-		desc = "LSP: " .. desc
-	end
+    if desc then
+        desc = "LSP: " .. desc
+    end
 
-	vim.keymap.set("n", keys, func, { buffer = bufnr, desc = desc })
+    vim.keymap.set("n", keys, func, { buffer = bufnr, desc = desc })
 end
 
 nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
@@ -72,17 +62,17 @@ nmap("gD", vim.lsp.buf.declaration, "[G]oto [D]eclaration")
 nmap("<leader>wa", vim.lsp.buf.add_workspace_folder, "[W]orkspace [A]dd Folder")
 nmap("<leader>wr", vim.lsp.buf.remove_workspace_folder, "[W]orkspace [R]emove Folder")
 nmap("<leader>wl", function()
-	print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+    print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
 end, "[W]orkspace [L]ist Folders")
 
 vim.keymap.set("n", "<leader>p", require("nabla").popup, { noremap = true, desc = "Open Nabla Popup" })
 vim.keymap.set("n", "<leader>nt", require("nabla").toggle_virt, { noremap = true, desc = "Toggle Nabla Virt" })
 vim.keymap.set("n", "<leader>nr", function()
-	vim.cmd("Ex")
+    vim.cmd "Ex"
 end, { noremap = true, desc = "Open NetRw" })
 vim.keymap.set("n", "<leader>ns", function()
-	vim.cmd("Sex")
+    vim.cmd "Sex"
 end, { noremap = true, desc = "Split Side NetRw" })
 vim.keymap.set("n", "<leader>nv", function()
-	vim.cmd("Vex")
+    vim.cmd "Vex"
 end, { noremap = true, desc = "Split Vertical NetRw" })
