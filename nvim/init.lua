@@ -237,7 +237,6 @@ require("lazy").setup({
             "nvim-treesitter/nvim-treesitter-textobjects",
         },
         build = ":TSUpdate",
-        version = "0.9.2",
     },
     -- NOTE: Next Step on Your Neovim Journey: Add/Configure additional "plugins" for kickstart
     --       These are some example plugins that I've included in the kickstart repository.
