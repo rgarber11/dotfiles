@@ -25,7 +25,6 @@ button {
   background: rgba (0, 0, 0, 0);
   border: 0;
 }
-
 /* Top panel in sample config uses this name */
 #panel-top {
   background: #101010;
@@ -34,25 +33,25 @@ button {
 
 /* Bottom panel in sample config uses this name */
 #panel-bottom {
-  background: #101010;
-  color: #eeeeee;
+  background: #002b36;
+  color: #839496;
 }
 
 /* Controls window in sample config uses this name */
 #controls-window {
   border-radius: 15px;
-  background: #36364f;
-  color: #eeeeee;
+  background: #002b36;
+  color: #839496;
 }
 #controls-window scale value {
-  color: #eeeeee;
+  color: #839496;
 }
 
 /* Brightness slider popup window in sample config uses this name */
 #brightness-popup {
   border-radius: 15px;
-  background: #36364f;
-  color: #eeeeee;
+  background: #002b36;
+  color: #eee8d5;
 }
 #brightness-popup box {
   padding: 15px;
