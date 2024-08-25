@@ -163,12 +163,20 @@ require("lazy").setup({
     },
 
     {
-        "maxmx03/solarized.nvim",
+        "craftzdog/solarized-osaka.nvim",
         lazy = false,
         priority = 1000,
         config = function()
-            vim.o.background = "dark"
-            vim.cmd.colorscheme "solarized"
+            require("solarized-osaka").setup({
+                style = "moon",
+                styles = {
+                    comments = { italic = true },
+                    keywords = { italic = true },
+                    sidebars = "transparent",
+                    floats = "transparent",
+                },
+            })
+            vim.cmd.colorscheme "solarized-osaka"
         end,
     },
 
@@ -179,7 +187,7 @@ require("lazy").setup({
         opts = {
             options = {
                 icons_enabled = false,
-                theme = "solarized",
+                theme = "solarized-osaka",
                 component_separators = "|",
                 section_separators = "",
             },
