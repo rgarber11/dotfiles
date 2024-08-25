@@ -77,7 +77,7 @@ end, { noremap = true, desc = "Split Side Oil" })
 vim.keymap.set("n", "<leader>nv", function()
     vim.cmd "vsplit"
     require("oil").open()
-end, { noremap = true, desc = "Split Vertical NetRw" })
+end, { noremap = true, desc = "Split Vertical Oil" })
 vim.keymap.set("n", "<leader>no", function()
     require("oil").open_float()
 end, { noremap = true, desc = "Open Oil in Hover Mode" })
