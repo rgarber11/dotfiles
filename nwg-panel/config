@@ -28,6 +28,7 @@
       "executor-kb",
       "executor-capslock",
       "executor-numlock",
+      "executor-night-light",
       "tray"
     ],
     "controls-settings": {
@@ -283,6 +284,23 @@
       "angle": 0.0,
       "sigrt": 34,
       "use-sigrt": false
+    },
+    "executor-night-light": {
+      "script": "/home/rgarber11/.config/nwg-panel/executors/night-light.sh",
+      "tooltip-text": "",
+      "on-left-click": "/home/rgarber11/.config/nwg-panel/executors/night-light.sh -t",
+      "on-middle-click": "",
+      "on-right-click": "",
+      "on-scroll-up": "",
+      "on-scroll-down": "",
+      "root-css-name": "",
+      "css-name": "",
+      "icon-placement": "left",
+      "icon-size": 16,
+      "interval": 0,
+      "angle": 0.0,
+      "sigrt": 35,
+      "use-sigrt": true
     }
   }
 ]

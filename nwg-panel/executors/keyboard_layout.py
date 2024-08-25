@@ -1,13 +1,11 @@
-#!/bin/python
+#!/bin/env python
 import argparse
 import json
 import os
 import socket
 import subprocess
 import sys
-
-# NOTE: THIS COPIES CODE FROM nwg-piotr/nwg-panel. While I prefer my implementation of this to his,
-# know that I stand on the shoulders of giants.
+from pathlib import Path
 
 
 def eprint(*args, **kwargs):
@@ -16,10 +14,14 @@ def eprint(*args, **kwargs):
 
 def hyprctl(cmd, buf_size=2048):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    socket_path = Path(
+        os.getenv("XDG_RUNTIME_DIR"),
+        "hypr",
+        os.getenv("HYPRLAND_INSTANCE_SIGNATURE"),
+        ".socket.sock",
+    )
     try:
-        s.connect(
-            "/tmp/hypr/{}/.socket.sock".format(os.getenv("HYPRLAND_INSTANCE_SIGNATURE"))
-        )
+        s.connect(str(socket_path))
         s.send(cmd.encode("utf-8"))
 
         output = b""
