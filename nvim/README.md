@@ -71,6 +71,7 @@ NVIM_APPNAME=rgarber11/dotfiles/nvim nvim
 ### lsp
 
 + [neovim/nvim-lspconfig](https://dotfyle.com/plugins/neovim/nvim-lspconfig)
++ [nvim-java/nvim-java](https://dotfyle.com/plugins/nvim-java/nvim-java)
 + [mfussenegger/nvim-lint](https://dotfyle.com/plugins/mfussenegger/nvim-lint)
 ### lsp-installer
 
