@@ -28,7 +28,6 @@ return {
             },
             ["core.latex.renderer"] = {},
             ["core.summary"] = {},
-            -- ["core.ui.calendar"] = {},
             ["core.ui"] = {},
             ["core.neorgcmd"] = {},
             ["core.export"] = {
