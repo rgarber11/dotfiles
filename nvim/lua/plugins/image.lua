@@ -1,3 +1,6 @@
+if vim.fn.has("win32") == 1 then
+    return {}
+end
 return {
     "3rd/image.nvim",
     event = "VeryLazy",
