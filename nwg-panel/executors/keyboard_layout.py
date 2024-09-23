@@ -84,7 +84,6 @@ def main():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.STDOUT,
         )
-        sys.exit(0)
     elif args.english:
         to_english()
         subprocess.Popen(
@@ -92,8 +91,8 @@ def main():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.STDOUT,
         )
-        sys.exit(0)
-    refresh()
+    else:
+        refresh()
 
 
 if __name__ == "__main__":
