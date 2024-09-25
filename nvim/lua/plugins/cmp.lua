@@ -21,6 +21,7 @@ return {
 
             -- Adds a number of user-friendly snippets
             "rafamadriz/friendly-snippets",
+            "hrsh7th/cmp-nvim-lsp-signature-help",
         },
         config = function()
             local cmp = require "cmp"
@@ -72,6 +73,8 @@ return {
                     { name = "nvim_lsp" },
                     { name = "luasnip" },
                     { name = "neorg" },
+                    { name = "path" },
+                    { name = "nvim_lsp_signature_help" },
                 },
             })
         end,
