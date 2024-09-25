@@ -42,14 +42,22 @@ def hyprctl(cmd: str, buf_size: int = 2048):
         return ""
 
 
-def get_current_layout():
+def get_keyboards() -> list[str]:
     o = hyprctl("j/devices")
     devices = json.loads(o)
     keyboards = devices["keyboards"] if "keyboards" in devices else []
+    return keyboards
+
+
+def get_current_layout() -> str:
+    keyboards = get_keyboards()
+    for k in keyboards:
+        if k["main"]:
+            return k["active_keymap"]
     for k in keyboards:
         if "keyboard" in k["name"]:
             return k["active_keymap"]
-    return keyboards[0]["layout"]
+    return keyboards[0]["active_keymap"]
 
 
 def refresh():
@@ -58,7 +66,16 @@ def refresh():
 
 
 def change_layouts():
-    hyprctl("switchxkblayout all next")
+    keyboards = get_keyboards()
+    # no_need = set(["video-bus", "video-bus-1", "power-button", "sleep-button"])
+    main = "current"
+    for k in keyboards:
+        # if k["name"] not in no_need and not k["main"]:
+        if not k["main"]:
+            hyprctl(f"switchxkblayout {k["name"]} next")
+        else:
+            main = k["name"]
+    hyprctl(f"switchxkblayout {main} next")
 
 
 def to_english():
