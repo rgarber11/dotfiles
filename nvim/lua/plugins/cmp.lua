@@ -20,8 +20,10 @@ return {
             "hrsh7th/cmp-path",
 
             -- Adds a number of user-friendly snippets
-            "rafamadriz/friendly-snippets",
+            { "rgarber11/friendly-snippets", branch = "windowsFriendlyPaths" },
             "hrsh7th/cmp-nvim-lsp-signature-help",
+            "tailwind-tools",
+            "onsails/lspkind-nvim",
         },
         config = function()
             local cmp = require "cmp"
@@ -75,6 +77,11 @@ return {
                     { name = "neorg" },
                     { name = "path" },
                     { name = "nvim_lsp_signature_help" },
+                },
+                formatting = {
+                    format = require("lspkind").cmp_format({
+                        before = require("tailwind-tools.cmp").lspkind_format,
+                    }),
                 },
             })
         end,
