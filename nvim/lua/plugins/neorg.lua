@@ -41,7 +41,7 @@ return {
                 },
             },
         }
-        if os.getenv "KITTY_WINDOW_ID" ~= 1 then
+        if os.getenv "KITTY_WINDOW_ID" ~= nil then
             load_settings["core.integrations.image"] = {}
         end
         require("neorg").setup({
