@@ -9,8 +9,13 @@ return {
         local cpplint = lint.linters.cpplint
         cpplint.args = { "--filter=-build/c++11,-build/c++14,-build/c++tr1" }
         lint.linters_by_ft = {
-            python = { "mypy", "ruff" },
+            python = { "mypy" },
             cpp = { "cpplint" },
+            cmake = { "cmakelint" },
+            haskell = { "hlint" },
+            sql = { "sqlfluff" },
+            bash = { "shellcheck" },
+            sh = { "shellcheck" },
         }
 
         local lint_augroup = vim.api.nvim_create_augroup("lint", { clear = true })
