@@ -2,11 +2,6 @@ return {
     "rgarber11/neorg",
     dependencies = {
         { "nvim-lua/plenary.nvim" },
-        {
-            "vhyrro/luarocks.nvim",
-            priority = 1000,
-            config = true,
-        },
     },
     branch = "main",
     config = function()
@@ -23,8 +18,13 @@ return {
             },
             ["core.completion"] = {
                 config = {
-                    engine = "nvim-cmp"
-                }
+                    engine = "nvim-cmp",
+                },
+            },
+            ["core.keybinds"] = {
+                config = {
+                    default_keybinds = false,
+                },
             },
             ["core.latex.renderer"] = {},
             ["core.summary"] = {},
@@ -41,13 +41,11 @@ return {
                 },
             },
         }
-        if vim.fn.has("win32") ~= 1 then
+        if os.getenv "KITTY_WINDOW_ID" ~= 1 then
             load_settings["core.integrations.image"] = {}
         end
         require("neorg").setup({
-            load = load_settings
+            load = load_settings,
         })
     end,
-    ft = "norg",
-    cmd = "Neorg",
 }
