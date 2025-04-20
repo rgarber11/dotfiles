@@ -218,10 +218,13 @@
       "name-length": 40,
       "show-empty": true,
       "mark-content": false,
-      "show-names": true,
-      "mark-floating": true,
-      "mark-xwayland": true,
-      "angle": 0.0
+      "show-names": false,
+      "mark-floating": false,
+      "mark-xwayland": false,
+      "angle": 0.0,
+      "show-inactive-workspaces": false,
+      "show-workspaces-from-all-outputs": false,
+      "show-workspaces": true
     },
     "start-hidden": false,
     "keyboard-layout": {
@@ -263,10 +266,10 @@
       "css-name": "",
       "icon-placement": "left",
       "icon-size": 16,
-      "interval": 1,
+      "interval": 0,
       "angle": 0.0,
-      "sigrt": 34,
-      "use-sigrt": false
+      "sigrt": 36,
+      "use-sigrt": true
     },
     "executor-numlock": {
       "script": "/home/rgarber11/.config/nwg-panel/executors/numlock_icon.sh",
@@ -280,10 +283,10 @@
       "css-name": "",
       "icon-placement": "left",
       "icon-size": 16,
-      "interval": 1,
+      "interval": 0,
       "angle": 0.0,
-      "sigrt": 34,
-      "use-sigrt": false
+      "sigrt": 37,
+      "use-sigrt": true
     },
     "executor-night-light": {
       "script": "/home/rgarber11/.config/nwg-panel/executors/night-light.sh",
@@ -301,6 +304,13 @@
       "angle": 0.0,
       "sigrt": 35,
       "use-sigrt": true
-    }
+    },
+    "monitor": "",
+    "random-wallpaper": {},
+    "width-as-percentage": false,
+    "hyprland-submap": {},
+    "run-if-output-exist": [],
+    "run-if-output-absent": [],
+    "niri-taskbar": {}
   }
 ]
