@@ -8,6 +8,7 @@ return {
         "hrsh7th/cmp-nvim-lsp",
     },
     config = function()
+        vim.diagnostic.config({ virtual_text = true })
         vim.api.nvim_create_autocmd("LspAttach", {
             group = vim.api.nvim_create_augroup("kickstart-lsp-attach", { clear = true }),
             callback = function(event)
@@ -65,9 +66,7 @@ return {
                     diagnostics = { disable = { "missing-fields" } },
                 },
             },
-            basedpyright = {},
             texlab = {},
-            ruff = {},
         }
 
         -- nvim-cmp supports additional completion capabilities, so broadcast that to servers
@@ -92,7 +91,7 @@ return {
             end,
         })
         require("lspconfig").hls.setup({
-            cmd = { "ghcup run hls", "--lsp" },
+            cmd = { "ghcup", "run", "--hls", "latest", "--ghc", "latest", "--cabal", "latest", "--", "haskell-language-server-wrapper", "--lsp" },
         })
     end,
 }
