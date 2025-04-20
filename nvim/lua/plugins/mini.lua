@@ -6,7 +6,6 @@ return {
         require("mini.surround").setup()
         require("mini.comment").setup()
         require("mini.pairs").setup()
-        require("mini.git").setup()
         require("mini.diff").setup()
         require("mini.notify").setup()
         require("mini.starter").setup()
