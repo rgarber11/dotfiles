@@ -20,7 +20,7 @@ return {
             "hrsh7th/cmp-path",
 
             -- Adds a number of user-friendly snippets
-            { "rgarber11/friendly-snippets", branch = "windowsFriendlyPaths" },
+            { "rafamadriz/friendly-snippets" },
             "hrsh7th/cmp-nvim-lsp-signature-help",
             "tailwind-tools",
             "onsails/lspkind-nvim",
