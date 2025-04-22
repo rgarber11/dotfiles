@@ -26,7 +26,6 @@ return {
                     default_keybinds = false,
                 },
             },
-            ["core.latex.renderer"] = {},
             ["core.summary"] = {},
             ["core.ui"] = {},
             ["core.neorgcmd"] = {},
@@ -42,7 +41,7 @@ return {
             },
         }
         if os.getenv "KITTY_WINDOW_ID" ~= nil then
-            load_settings["core.integrations.image"] = {}
+            load_settings["core.latex.renderer"] = {}
         end
         require("neorg").setup({
             load = load_settings,
