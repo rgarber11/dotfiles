@@ -24,6 +24,7 @@ return {
             "hrsh7th/cmp-nvim-lsp-signature-help",
             {
                 "luckasRanarison/tailwind-tools.nvim",
+                name = "tailwind-tools",
                 build = ":UpdateRemotePlugins"
             },
             "onsails/lspkind-nvim",
