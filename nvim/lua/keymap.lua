@@ -116,7 +116,7 @@ local set_ltex_lang = function(lsp_id, lang_id)
         return
     end
     if lang_id == 2 then
-        require("hyprland-keymap-picker").set_keymap(2)
+        pcall(require("hyprland-keymap-picker").set_keymap, 2)
     end
     local lang = lang_codes[lang_id]
     vim.notify("LTeX language set to " .. langs[lang_id], vim.log.levels.INFO)
