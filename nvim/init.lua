@@ -95,7 +95,7 @@ require("lazy").setup({
         priority = 1000,
         config = function()
             require("solarized-osaka").setup({
-                style = "moon",
+                style = "storm",
                 styles = {
                     comments = { italic = true },
                     keywords = { italic = true },
