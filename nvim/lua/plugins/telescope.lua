@@ -35,6 +35,8 @@ return {
                         i = {
                             ["<C-u>"] = false,
                             ["<C-d>"] = false,
+                            ["<C-x>"] = false,
+                            ["<C-s>"] = require("telescope.actions").select_horizontal,
                         },
                     },
                 },

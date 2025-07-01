@@ -1,0 +1,16 @@
+[user]
+	# Fill this in!
+[credential]
+	helper = cache
+[core]
+	autocrlf = input
+[commit]
+	gpgsign = true
+[gpg]
+	format = ssh
+[push]
+	autoSetupRemote = true
+[alias]
+	pushf = push --force-with-lease
+	append-commit = commit --amend --date=now --no-edit
+	force-pull = pull --rebase --autostash

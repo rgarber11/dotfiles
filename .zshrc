@@ -1,3 +1,4 @@
+#!/bin/zsh
 if (( RANDOM % 10 < 3 )); then fortune ru | cowsay; else fortune -a | cowsay; fi
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
 # Initialization code that may require console input (password prompts, [y/n]
@@ -107,7 +108,7 @@ ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=23'
 # users are encouraged to define aliases within the ZSH_CUSTOM folder.
 # For a full list of active aliases, run `alias`.
 #
-[[ "$(cat /proc/$PPID/comm)" =~ "kitty" ]] && alias ssh="kitty +kitten ssh"
+[[ "$(cat /proc/$PPID/comm)" =~ "kitty" ]] && alias ssh="kitten ssh"
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
@@ -115,7 +116,7 @@ ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=23'
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
-export QSYS_ROOTDIR="/home/rgarber11/.cache/yay/quartus-free/pkg/quartus-free-quartus/opt/intelFPGA/23.1/quartus/sopc_builder/bin"
+export QSYS_ROOTDIR="/home/rgarber11/.cache/yay/quartus-free/pkg/quartus-free-quartus/opt/intelFPGA/24.1/quartus/sopc_builder/bin"
 zshcache_time="$(date +%s%N)"
 
 autoload -Uz add-zsh-hook
@@ -138,13 +139,29 @@ sdiff() {
 add-zsh-hook -Uz precmd rehash_precmd
 set -o extendedglob
 export VCPKG_ROOT=/home/rgarber11/.local/bin/vcpkg
-PATH="${VCPKG_ROOT}:/home/rgarber11/.config/emacs/bin:/home/rgarber11/perl5/bin${PATH:+:${PATH}}"; export PATH;
+PATH="${VCPKG_ROOT}:/home/rgarber11/.config/emacs/bin:/home/rgarber11/perl5/bin${PATH:+:${PATH}}:$HOME/go/bin"; export PATH;
 PERL5LIB="/home/rgarber11/perl5/lib/perl5${PERL5LIB:+:${PERL5LIB}}"; export PERL5LIB;
 PERL_LOCAL_LIB_ROOT="/home/rgarber11/perl5${PERL_LOCAL_LIB_ROOT:+:${PERL_LOCAL_LIB_ROOT}}"; export PERL_LOCAL_LIB_ROOT;
 PERL_MB_OPT="--install_base \"/home/rgarber11/perl5\""; export PERL_MB_OPT;
 PERL_MM_OPT="INSTALL_BASE=/home/rgarber11/perl5"; export PERL_MM_OPT;
 alias give_fortune="if (( RANDOM % 10 < 3 )); then fortune ru | cowsay; else fortune -a | cowsay; fi"
+alias new_mirrorlist="reflector -n 50 -c US --delay 0.25 -f 20 --sort rate > mirrorlist.new"
+
+ffmpeg_all_info() {
+  ffprobe -v quiet -of json -show_entries stream:format -show_chapters file:"$1"
+}
 VCPKG_DOWNLOADS=/home/rgarber11/.cache/vcpkg
+export GHCUP_USE_XDG_DIRS=1
+delete_node_modules() {
+  echo -n "Are you sure you want to delete all node_modules directories (CHECK THE DIRECTORY YOU'RE IN!!!)? (y/n): "
+  read REPLY
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Operation cancelled."
+    return 1
+  fi
+find . -name "node_modules" -type d -prune -exec rm -rf '{}' \;
+}
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
 __conda_setup="$('/home/rgarber11/miniforge3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
@@ -158,5 +175,9 @@ else
     fi
 fi
 unset __conda_setup
-# <<< conda initialize <<<
 
+if [ -f "/home/rgarber11/miniforge3/etc/profile.d/mamba.sh" ]; then
+    . "/home/rgarber11/miniforge3/etc/profile.d/mamba.sh"
+fi
+export ANDROID_HOME="/home/rgarber11/Android/Sdk"
+# <<< conda initialize <<<
