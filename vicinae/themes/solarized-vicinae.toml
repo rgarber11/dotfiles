@@ -1,0 +1,94 @@
+# Solarized Dark theme for Vicinae
+# https://ethanschoonover.com/solarized/
+
+[meta]
+version = "1"
+name = "Solarized Dark"
+description = "Ethan Schoonover's Solarized Dark palette"
+variant = "dark"
+inherits = "vicinae-dark"
+
+# Solarized Dark palette reference:
+#   base03  #002b36  darkest background
+#   base02  #073642  dark background / highlights
+#   base01  #586e75  comments / secondary content
+#   base00  #657b83  body text (light theme)
+#   base0   #839496  body text (dark theme)
+#   base1   #93a1a1  emphasized content
+#   yellow  #b58900
+#   orange  #cb4b16
+#   red     #dc322f
+#   magenta #d33682
+#   violet  #6c71c4
+#   blue    #268bd2
+#   cyan    #2aa198
+#   green   #859900
+
+[colors.core]
+accent = "#268bd2"            # blue
+accent_foreground = "#002b36" # base03 — dark bg for legibility on blue
+background = "#002b36"        # base03
+foreground = "#839496"        # base0
+secondary_background = "#073642" # base02
+border = "#073642"            # base02
+
+[colors.main_window]
+border = "#073642"
+footer = { background = "colors.core.secondary_background" }
+
+[colors.settings_window]
+border = "#073642"
+
+[colors.accents]
+blue = "#268bd2"
+green = "#859900"
+magenta = "#d33682"
+orange = "#cb4b16"
+red = "#dc322f"
+yellow = "#b58900"
+cyan = "#2aa198"
+purple = "#6c71c4"  # violet
+
+[colors.shortcut]
+border = "colors.core.border"
+
+[colors.text]
+default = "colors.core.foreground"
+muted = "#586e75"        # base01
+danger = "#dc322f"       # red
+success = "#859900"      # green
+placeholder = "#586e75"  # base01
+selection = { background = "#268bd2", foreground = "#002b36" }
+
+[colors.text.links]
+default = "#268bd2"  # blue
+visited = "#6c71c4"  # violet
+
+[colors.input]
+border = "#073642"        # base02
+border_focus = "#268bd2"  # blue
+border_error = "#dc322f"  # red
+
+[colors.button.primary]
+background = "#073642"              # base02
+foreground = "#839496"              # base0
+hover = { background = "#bb073642" }
+focus = { outline = "colors.core.accent" }
+
+[colors.list.item.selection]
+background = "#073642"           # base02
+foreground = "#93a1a1"           # base1 — emphasized
+secondary_background = "#073642" # base02
+secondary_foreground = "#839496" # base0
+
+[colors.grid.item]
+background = "#073642"              # base02
+hover = { outline = "#839496" }     # base0
+selection = { outline = "#268bd2" } # blue
+
+[colors.scrollbars]
+background = "#073642"  # base02
+
+[colors.loading]
+bar = "#268bd2"     # blue
+spinner = "#2aa198" # cyan

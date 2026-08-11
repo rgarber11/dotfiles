@@ -12,10 +12,14 @@ Repeater {
     required property int numWorkspaces
     required property int numWindows
     required property real fullWidth
+    function getButtonWidth(windowTextImplicitWidth, windowFullWidth, numWindows, numWorkspaces) {
+        const tempWidth = Math.min(windowTextImplicitWidth + 30, (windowFullWidth / numWindows) - 15 * numWorkspaces);
+        return tempWidth < 30 ? 30 : tempWidth;
+    }
     model: workspace.toplevels
     delegate: Button {
         id: toplevelButton
-        implicitWidth: Math.min(windowText.implicitWidth + 35, (fullWidth / numWindows) - 15 * numWorkspaces)
+        width: windowWorkspaces.getButtonWidth(windowText.implicitWidth, windowWorkspaces.fullWidth, windowWorkspaces.numWindows, windowWorkspaces.numWorkspaces)
         anchors.verticalCenter: parent.verticalCenter
         height: 24
         contentItem: Row {

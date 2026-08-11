@@ -1,13 +1,19 @@
+//@ pragma IconTheme Qogir
+
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Widgets
-import QtQuick.Controls
 import Quickshell.Services.SystemTray
+import QtQuick.Controls
 
 Repeater {
+    id: trayRepeater
     model: SystemTray.items
+    required property real leftAbsoluteX
     delegate: Rectangle {
         id: trayButton
+        required property SystemTrayItem modelData
         anchors.verticalCenter: parent.verticalCenter
         implicitWidth: 20
         implicitHeight: 20
@@ -16,10 +22,9 @@ Repeater {
         border.width: 1
         radius: 4
         IconImage {
-            anchors.centerIn: parent
-            width: parent.width - 1
-            height: parent.height - 1
-            source: modelData.icon
+            anchors.fill: parent
+            anchors.margins: 1
+            source: trayButton.modelData.icon
         }
         MouseArea {
             id: trayMouseArea
@@ -27,12 +32,12 @@ Repeater {
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
             onClicked: mouse => {
-                if (mouse.button === Qt.LeftButton && !modelData.onlyMenu && (modelData.title !== "caffeine" && modelData.title !== "Network")) {
-                    modelData.activate();
-                } else if (mouse.button === Qt.MiddleButton && !modelData.onlyMenu) {
-                    modelData.secondaryActivate();
-                } else if (modelData.hasMenu) {
-                    modelData.display(panel, trayButton.x + rightRow.x, 32);
+                if (mouse.button === Qt.LeftButton && !trayButton.modelData.onlyMenu && trayButton.modelData.title !== "Network") {
+                    trayButton.modelData.activate();
+                } else if (mouse.button === Qt.MiddleButton && !trayButton.modelData.onlyMenu) {
+                    trayButton.modelData.secondaryActivate();
+                } else if (trayButton.modelData.hasMenu) {
+                    trayButton.modelData.display(QsWindow.window, trayButton.x + trayRepeater.leftAbsoluteX + (trayButton.width / 2), 32);
                 }
             }
             onEntered: {
@@ -46,60 +51,23 @@ Repeater {
                 trayToolTipTimer.running = true;
             }
         }
-        PopupWindow {
+        Tooltip {
             id: trayToolTip
-            implicitWidth: toolTipRect.implicitWidth
-            implicitHeight: toolTipRect.implicitHeight
-            color: "transparent"
-            Rectangle {
-                id: toolTipRect
-                anchors.fill: parent
-                color: "#002b36"
-                implicitWidth: toolTipText.implicitWidth + 10
-                implicitHeight: toolTipText.implicitHeight + 10
-                radius: 15
-                border.color: "#073642"
-                border.width: 1
-                Text {
-                    id: toolTipText
-                    anchors.centerIn: parent
-                    text: modelData.tooltipTitle !== "" ? modelData.tooltipTitle : modelData.tooltipDescription !== "" ? modelData.tooltipDescription : modelData.title
-                    color: "#839496"
-                }
-            }
-            anchor {
-                window: panel
-                rect {
-                    x: trayButton.x + rightRow.x - (this.width / 2)
-                    y: 33
-                }
-            }
-            visible: false
-            State {
-                name: "visible"
-                when: trayToolTip.visible
-            }
-            Transition {
-                reversible: true
-                PropertyAnimation {
-                    target: trayToolTip
-                    property: "visible"
-                    duration: 1000
-                    easing.type: Easing.InOutQuad
-                }
-            }
+            absoluteX: trayButton.x + trayRepeater.leftAbsoluteX
+            absoluteY: 33
+            text: trayButton.modelData.tooltipTitle !== "" ? trayButton.modelData.tooltipTitle : trayButton.modelData.tooltipDescription !== "" ? trayButton.modelData.tooltipDescription : trayButton.modelData.title
         }
         Timer {
             id: trayToolTipTimer
             property bool on: true
-            interval: 100
+            interval: 150
             repeat: false
             running: false
             onTriggered: {
                 if (on) {
-                    trayToolTip.visible = true;
+                    trayToolTip.show();
                 } else {
-                    trayToolTip.visible = false;
+                    trayToolTip.hide();
                 }
             }
         }

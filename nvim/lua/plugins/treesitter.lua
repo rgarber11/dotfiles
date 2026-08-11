@@ -1,110 +1,88 @@
 return {
-    {
-        -- Highlight, edit, and navigate code
-        "nvim-treesitter/nvim-treesitter",
-        dependencies = {
-            "nvim-treesitter/nvim-treesitter-textobjects",
-        },
-        branch = "master",
-        build = ":TSUpdate",
-        config = function()
-            require("nvim-treesitter.configs").setup({
-                -- Add languages to be installed here that you want installed for treesitter
-                ensure_installed = {
-                    "c",
-                    "cmake",
-                    "cpp",
-                    "csv",
-                    "go",
-                    "html",
-                    "ini",
-                    "lua",
-                    "python",
-                    "rust",
-                    "tsx",
-                    "latex",
-                    "markdown",
-                    "toml",
-                    "javascript",
-                    "typescript",
-                    "vimdoc",
-                    "vim",
-                    "php",
-                    "bash",
-                    "java",
-                    "r",
-                    "xml",
-                    "yaml",
-                },
+  {
+    -- Highlight, edit, and navigate code
+    'nvim-treesitter/nvim-treesitter',
+    branch = 'main',
+    lazy = false,
+    event = 'BufRead',
+    build = ':TSUpdate',
+    config = function()
+      local treesitter = require 'nvim-treesitter'
+      -- Add languages to be installed here that you want installed for treesitter
+      local ensure_installed = {
+        'c',
+        'cmake',
+        'cpp',
+        'csv',
+        'go',
+        'html',
+        'ini',
+        'lua',
+        'python',
+        'rust',
+        'tsx',
+        'latex',
+        'markdown',
+        'toml',
+        'javascript',
+        'typescript',
+        'vimdoc',
+        'vim',
+        'php',
+        'bash',
+        'java',
+        'r',
+        'xml',
+        'yaml',
+      }
 
-                -- Autoinstall languages that are not installed. Defaults to false (but you can change for yourself!)
-                auto_install = true,
-
-                highlight = { enable = true },
-                indent = { enable = true },
-                incremental_selection = {
-                    enable = true,
-                    keymaps = {
-                        init_selection = "<c-space>",
-                        node_incremental = "<c-space>",
-                        scope_incremental = "<c-s>",
-                        node_decremental = "<M-space>",
-                    },
-                },
-                textobjects = {
-                    select = {
-                        enable = true,
-                        lookahead = true, -- Automatically jump forward to textobj, similar to targets.vim
-                        keymaps = {
-                            -- You can use the capture groups defined in textobjects.scm
-                            ["aa"] = "@parameter.outer",
-                            ["ia"] = "@parameter.inner",
-                            ["af"] = "@function.outer",
-                            ["if"] = "@function.inner",
-                            ["ac"] = "@class.outer",
-                            ["ic"] = "@class.inner",
-                        },
-                    },
-                    move = {
-                        enable = true,
-                        set_jumps = true, -- whether to set jumps in the jumplist
-                        goto_next_start = {
-                            ["]m"] = "@function.outer",
-                            ["]]"] = "@class.outer",
-                        },
-                        goto_next_end = {
-                            ["]M"] = "@function.outer",
-                            ["]["] = "@class.outer",
-                        },
-                        goto_previous_start = {
-                            ["[m"] = "@function.outer",
-                            ["[["] = "@class.outer",
-                        },
-                        goto_previous_end = {
-                            ["[M"] = "@function.outer",
-                            ["[]"] = "@class.outer",
-                        },
-                    },
-                    swap = {
-                        enable = true,
-                        swap_next = {
-                            ["<leader>a"] = "@parameter.inner",
-                        },
-                        swap_previous = {
-                            ["<leader>A"] = "@parameter.inner",
-                        },
-                    },
-                },
-            })
-            local parser_config = require("nvim-treesitter.parsers").get_parser_configs()
-            parser_config.prolog = {
-                install_info = {
-                    url = "/home/rgarber11/tree-sitter/tree-sitter-prolog",
-                    files = { "src/parser.c" },
-                    branch = "main",
-                },
-                filetype = "pl",
-            }
+      if ensure_installed and #ensure_installed > 0 then
+        treesitter.install(ensure_installed)
+      end
+      local langs = treesitter.get_installed 'parsers'
+      for _, lang in ipairs(langs) do
+        vim.api.nvim_create_autocmd('FileType', {
+          pattern = vim.treesitter.language.get_filetypes(lang),
+          callback = function(event)
+            vim.treesitter.start(event.buf, lang)
+            vim.bo[event.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+          end,
+        })
+      end
+      vim.api.nvim_create_autocmd('BufRead', {
+        callback = function(event)
+          local filetype = vim.api.nvim_get_option_value('filetype', { buf = event.buf })
+          if filetype == '' then
+            return
+          end
+          local lang = vim.treesitter.language.get_lang(filetype)
+          if not lang or not vim.tbl_contains(require('nvim-treesitter').get_available(), lang) then
+            return
+          end
+          require('nvim-treesitter').install(lang):wait(30000)
+          vim.treesitter.start(event.buf, lang)
         end,
+      })
+    end,
+  },
+  {
+    'nvim-treesitter/nvim-treesitter-textobjects',
+    branch = 'main',
+    dependencies = { 'nvim-treesitter/nvim-treesitter' },
+    opts = {
+      select = {
+        enable = true,
+        lookahead = true, -- Automatically jump forward to textobj, similar to targets.vim
+      },
+      move = {
+        set_jumps = true, -- whether to set jumps in the jumplist
+      },
     },
+  },
+  {
+    'folke/flash.nvim',
+    event = 'VeryLazy',
+    ---@type Flash.Config
+    opts = {},
+  },
 }

@@ -59,11 +59,6 @@ Row {
         }
         implicitHeight: 30
         width: langText.implicitWidth + 2
-        Process {
-            id: langProc
-            command: ["hyprctl", "switchxkblayout", "all", "next"]
-            running: false
-        }
         background: Rectangle {
             id: langRect
             color: langButton.hovered ? "#073642" : "#002b36"
@@ -72,9 +67,25 @@ Row {
             height: langButton.height
         }
         onClicked: {
-            langProc.running = true;
+            Language.changeLanguage();
         }
     }
-    Tray {}
-    Battery {}
+    Row {
+        id: trayRow
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 2
+        Tray {
+            leftAbsoluteX: rightRow.x + trayRow.x
+        }
+        Caffeine {
+            leftAbsoluteX: rightRow.x + trayRow.x
+        }
+        Volume {
+            leftAbsoluteX: rightRow.x + trayRow.x
+        }
+        Sunset {
+            leftAbsoluteX: rightRow.x + trayRow.x
+        }
+        Battery {}
+    }
 }

@@ -2,10 +2,12 @@
 
 import QtQuick
 import Quickshell
-import "./modules/bar/"
+import "./modules/bar"
 
 ShellRoot {
     id: root
+
+    Component.onCompleted: Quickshell.watchFiles = true
 
     Loader {
         active: true

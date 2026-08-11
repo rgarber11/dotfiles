@@ -1,93 +1,83 @@
 return {
-    {
-        -- Autocompletion
-        "hrsh7th/nvim-cmp",
-        dependencies = {
-            -- Snippet Engine & its associated nvim-cmp source
-            {
-                "L3MON4D3/LuaSnip",
-                build = (function()
-                    if vim.fn.has "win32" == 1 then
-                        return
-                    end
-                    return "make install_jsregexp"
-                end)(),
-            },
-            "saadparwaiz1/cmp_luasnip",
+  {
+    'saghen/blink.compat',
+    -- use v2.* for blink.cmp v1.*
+    version = '2.*',
+    -- lazy.nvim will automatically load the plugin when it's required by blink.cmp
+    lazy = true,
+    -- make sure to set opts so that lazy.nvim calls blink.compat's setup
+    opts = {},
+  },
+  {
+    -- Autocompletion
+    'saghen/blink.cmp',
+    version = '1.x',
 
-            -- Adds LSP completion capabilities
-            "hrsh7th/cmp-nvim-lsp",
-            "hrsh7th/cmp-path",
-
-            -- Adds a number of user-friendly snippets
-            { "rafamadriz/friendly-snippets" },
-            "hrsh7th/cmp-nvim-lsp-signature-help",
-            {
-                "luckasRanarison/tailwind-tools.nvim",
-                name = "tailwind-tools",
-                build = ":UpdateRemotePlugins"
-            },
-            "onsails/lspkind-nvim",
-        },
+    dependencies = {
+      {
+        'L3MON4D3/LuaSnip',
+        dependencies = { 'rafamadriz/friendly-snippets' },
+        build = (function()
+          if vim.fn.has 'win32' == 1 then
+            return
+          end
+          return 'make install_jsregexp'
+        end)(),
+        version = 'v2.*',
         config = function()
-            local cmp = require "cmp"
-            local luasnip = require "luasnip"
-            require("luasnip.loaders.from_vscode").lazy_load()
-            luasnip.config.setup({})
-
-            cmp.setup({
-                snippet = {
-                    expand = function(args)
-                        luasnip.lsp_expand(args.body)
-                    end,
-                },
-                mapping = cmp.mapping.preset.insert({
-                    ["<C-n>"] = cmp.mapping.select_next_item(),
-                    ["<C-p>"] = cmp.mapping.select_prev_item(),
-                    ["<C-d>"] = cmp.mapping.scroll_docs(-4),
-                    ["<C-f>"] = cmp.mapping.scroll_docs(4),
-                    ["<C-Space>"] = cmp.mapping.complete(),
-                    ["<C-e"] = cmp.mapping.abort(),
-                    ["<CR>"] = cmp.mapping.confirm({
-                        behavior = cmp.ConfirmBehavior.Replace,
-                        select = true,
-                    }),
-                    ["<Tab>"] = cmp.mapping(function(fallback)
-                        if cmp.visible() then
-                            cmp.select_next_item()
-                        elseif luasnip.expand_or_locally_jumpable() then
-                            luasnip.expand_or_jump()
-                        else
-                            fallback()
-                        end
-                    end, { "i", "s" }),
-                    ["<S-Tab>"] = cmp.mapping(function(fallback)
-                        if cmp.visible() then
-                            cmp.select_prev_item()
-                        elseif luasnip.locally_jumpable(-1) then
-                            luasnip.jump(-1)
-                        else
-                            fallback()
-                        end
-                    end, { "i", "s" }),
-                }),
-                sources = {
-                    {
-                        name = "lazydev",
-                        group_index = 0, -- set group index to 0 to skip loading LuaLS completions
-                    },
-                    { name = "nvim_lsp" },
-                    { name = "luasnip" },
-                    { name = "neorg" },
-                    { name = "path" },
-                    { name = "nvim_lsp_signature_help" },
-                },
-                formatting = {
-                    format = require("lspkind").cmp_format({
-                        before = require("tailwind-tools.cmp").lspkind_format,
-                    }),
-                },
-            })
+          require('luasnip.loaders.from_vscode').lazy_load()
+          require('luasnip').config.setup {}
         end,
+      },
+      {
+        'folke/lazydev.nvim',
+        ft = 'lua', -- only load on lua files
+        dependencies = {
+          { 'Bilal2453/luvit-meta', lazy = true }, -- optional `vim.uv` typings
+        },
+        opts = {
+          library = {
+            'lazy.nvim',
+            -- See the configuration section for more details
+            -- Load luvit types when the `vim.uv` word is found
+            { path = 'luvit-meta/library', words = { 'vim%.uv' } },
+          },
+          integrations = {
+            lspconfig = true,
+            cmp = true,
+          },
+        },
+      },
     },
+    ---@module 'blink.cmp'
+    ---@type blink.cmp.Config
+    opts = {
+      keymap = { preset = 'default', ['<Enter>'] = { 'select_and_accept', 'fallback' } },
+      signature = { enabled = true },
+      snippets = { preset = 'luasnip' },
+      completion = {
+        documentation = { auto_show = true, auto_show_delay_ms = 300 },
+      },
+      sources = {
+        default = { 'lazydev', 'lsp', 'path', 'snippets', 'buffer' },
+        providers = {
+          lazydev = {
+            name = 'LazyDev',
+            module = 'lazydev.integrations.blink',
+            -- make lazydev completions top priority (see `:h blink.cmp`)
+            score_offset = 100,
+          },
+          neorg = {
+            name = 'neorg',
+            module = 'blink.compat.source',
+          },
+        },
+        per_filetype = {
+          codecompanion = { 'codecompanion' },
+        },
+      },
+      fuzzy = { implementation = 'prefer_rust_with_warning' },
+    },
+    opts_extend = { 'sources.default' },
+  },
 }
