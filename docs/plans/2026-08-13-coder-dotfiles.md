@@ -70,6 +70,16 @@
 
 ## Task 1: Test harness
 
+> **Status: complete.** The committed harness has since moved ahead of the
+> listing below — treat `tests/` in the repo as source of truth, not this text.
+> Landed in `f6d2347`, then `3ffbb14` (fixed a vacuous `downloading difftastic`
+> needle) and `6331075` (review fixes: seed a real `~/.zshrc` so the backup path
+> is actually exercised and assert `backups=1` in both passes; assert the
+> `.zshrc` and `~/.config/nvim` symlinks in `CHECKS` *and* `AFTER`; replace the
+> flat `repo_status=0` with a before/after `repo_status_delta=0` so an
+> uncommitted host-side edit cannot false-fail; guard unknown arguments; drop
+> the unused `assert_ok`/`assert_fails`).
+
 **Files:**
 - Create: `tests/Containerfile`
 - Create: `tests/lib.sh`
