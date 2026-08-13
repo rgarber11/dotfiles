@@ -9,7 +9,7 @@ APT_PACKAGES=(
   imagemagick libmagickwand-dev
   python3-pip
   fortune-mod fortunes cowsay
-  qrencode chafa btop
+  qrencode btop
 )
 
 missing=()
