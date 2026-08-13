@@ -1,5 +1,34 @@
 # Dotfiles
 
+Two profiles share one repo:
+
+- **`arch/`** — the Hyprland desktop. Install with `./install.sh --profile arch`
+  (always explicit, so it can never run by accident).
+- **`headless/`** — Coder workspaces. Installed automatically by
+  `coder dotfiles`, which runs `install.sh` on every workspace start.
+- **`shared/`** — Neovim, zsh functions and options, the p10k prompt, and the
+  git identity/aliases used by both.
+
+## Coder setup
+
+One-time, per workspace:
+
+```
+coder update <workspace> --parameter dotfiles_uri=https://github.com/rgarber11/dotfiles
+```
+
+`dotup` inside the workspace re-resolves the latest Neovim, difftastic and
+fastfetch, pulls the zsh plugins, and runs `herdr update`. Nothing else touches
+the network on a workspace start.
+
+## Testing
+
+`./tests/run.sh` runs `install.sh` in a podman container that mimics the
+`dsp-base` image, using a named volume for `/home/coder` so the
+persistent-`$HOME`/ephemeral-`/usr` split is reproduced faithfully.
+
+See `docs/specs/2026-08-13-coder-dotfiles-design.md` for the full design.
+
 All of my dotfiles
 
 1. **Neovim**: My config is based on an old version of [Kickstart.nvim](https://github.com/nvim-lua/kickstart.nvim). However, it has been thoroughly changed, and now doesn't really resemble its ancestor. Quite maximalist, so is very batteries included.
@@ -9,6 +38,6 @@ All of my dotfiles
 4. **NWG-Dock-Hyprland**, **Anyrun**: Mostly cosmetic changes to make them _solarized_
 5. **Kitty** is my current terminal. I have not changed much, aside from using a solarized theme.
 6. **Alacritty** is my backup terminal. All I've done is changed themes.
-7. **Zsh**: My `.zshrc` is a mess, and needs updating. Overall, the only thing in here that I'd keep is my comment formatting script for copying into Jupyter Notebooks, and my script that gives me a cowsay fortune, with proper split on English and Russian Fortunes (note: The in-built `fortune -n 30% a -n 70% b` did not work for me.) Hopefully will be editing this down soon. :tm:
+7. **Zsh**: Shared options and functions (including the cowsay fortune greeting, with a proper split on English and Russian fortunes — note: the in-built `fortune -n 30% a -n 70% b` did not work for me) live in `shared/zsh/` and get sourced by both profiles. `arch/zshrc` is still oh-my-zsh-based, plugins and all. `headless/zshrc` is oh-my-zsh-free: it git-clones five plain plugins (powerlevel10k, zsh-autosuggestions, zsh-syntax-highlighting, zsh-history-substring-search, zsh-completions) straight from upstream instead.
 8. **Komorebi**: ~~My preferred tiling window manager for Windows. My dislike for gaps is on display here as well. The rest is mostly default config (I might want to change the shortcuts to match Hyprland at some point). `applications.yaml` contains my attempt at managing Mullvad VPN, which at this point is a failure (so not upstream).~~ (Deprecated due to license change: Currently switched to [Whim](https://github.com/dalyIsaac/Whim))
 9. **SwayNC**: Simple Notification Center and Daemon. I did my best to solarize it.

@@ -39,7 +39,7 @@ luac.out
 *.x86_64
 *.hex
 
-./hypr/hyprland/dpms_state
+arch/hypr/hyprland/dpms_state
 
 # herdr runtime state
 *.log
