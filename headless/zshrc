@@ -1,0 +1,45 @@
+# ~/.zshrc -- Coder workspace (headless profile). Managed by ~/dotfiles.
+# Machine-local overrides belong in ~/.zshrc.local, which is gitignored.
+
+# Powerlevel10k instant prompt. Must stay near the top; anything that writes to
+# the console (the greeting, notably) has to come after it.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+export EDITOR=nvim
+export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+export NODE_OPTIONS="--max_old_space_size=8196 --stack-trace-limit=1000"
+
+ZSH_PLUGIN_DIR="$HOME/.local/share/zsh/plugins"
+
+# zsh-completions has to extend fpath before compinit runs.
+fpath=("$ZSH_PLUGIN_DIR/zsh-completions/src" "$HOME/.local/share/zsh/site-functions" $fpath)
+autoload -Uz compinit && compinit
+zstyle :compinstall filename "$HOME/.zshrc"
+
+source "$HOME/dotfiles/shared/zsh/options.zsh"
+source "$HOME/dotfiles/shared/zsh/functions.zsh"
+
+# Prompt.
+source "$ZSH_PLUGIN_DIR/powerlevel10k/powerlevel10k.zsh-theme"
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+
+# Plugin order is load-bearing: autosuggestions, then syntax-highlighting,
+# then history-substring-search LAST -- it must bind after highlighting loads.
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=23'
+source "$ZSH_PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh"
+source "$ZSH_PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+source "$ZSH_PLUGIN_DIR/zsh-history-substring-search/zsh-history-substring-search.zsh"
+bindkey '^[[A' history-substring-search-up
+bindkey '^[[B' history-substring-search-down
+bindkey -M emacs '^P' history-substring-search-up
+bindkey -M emacs '^N' history-substring-search-down
+
+# Re-resolve the latest nvim/difft/fastfetch, pull zsh plugins, update herdr.
+alias dotup="$HOME/dotfiles/install.sh --upgrade"
+
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+
+# Greeting last: it writes to the console, so it has to follow instant prompt.
+give_fortune

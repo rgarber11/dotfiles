@@ -1,0 +1,9 @@
+# Runs for EVERY zsh invocation, interactive or not. Keep it minimal.
+#
+# The Coder agent exports GIT_AUTHOR_*/GIT_COMMITTER_* from the workspace
+# owner's Coder account email, and git resolves those ahead of user.email --
+# so without this, shared/git/common.gitconfig would have no effect and every
+# commit would carry the wrong address.
+#
+# Do NOT unset GIT_SSH_COMMAND or GIT_ASKPASS: Coder relies on both.
+unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
