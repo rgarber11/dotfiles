@@ -79,12 +79,17 @@ refresh_git_branch() {
 
 # 30% Russian fortunes where that database exists. Ubuntu ships no fortunes-ru,
 # so fall back rather than printing an error into every new shell.
+#
+# Don't probe with `fortune -f`: it does not enumerate subdirectory-style
+# databases, so on Arch -- where fortune-mod-ru installs to /usr/share/fortune/ru/
+# -- a probe never matches and the Russian branch would never fire. Just try it
+# and fall back when it yields nothing.
 give_fortune() {
   (( $+commands[fortune] )) || return 0
   (( $+commands[cowsay] )) || return 0
-  if (( RANDOM % 10 < 3 )) && fortune -f 2>&1 | grep -qw ru; then
-    fortune ru | cowsay
-  else
-    fortune -a | cowsay
-  fi
+  local text=""
+  (( RANDOM % 10 < 3 )) && text="$(fortune ru 2>/dev/null)"
+  [[ -n "$text" ]] || text="$(fortune -a 2>/dev/null)"
+  [[ -n "$text" ]] && print -r -- "$text" | cowsay
+  return 0
 }
