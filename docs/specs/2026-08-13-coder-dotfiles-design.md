@@ -51,8 +51,7 @@ dotfiles/
 │   │                          #   command_stats, unzip_into, to_qr,
 │   │                          #   refresh_git_branch, give_fortune
 │   ├── zsh/options.zsh        # setopt / bindkey / correction common to both
-│   ├── zsh/p10k.zsh           # the 1834-line prompt config, newly committed
-│   └── herdr/base.toml        # herdr settings minus [theme]
+│   └── zsh/p10k.zsh           # the 1834-line prompt config, newly committed
 ├── headless/
 │   ├── zshrc
 │   ├── zshenv                 # unsets the agent's GIT_AUTHOR_*/GIT_COMMITTER_*
@@ -88,9 +87,18 @@ second run.
   `headless`. Otherwise the script refuses and prints usage; installing the
   `arch` profile requires an explicit `--profile arch`. This prevents an
   accidental invocation from clobbering the desktop.
+- **Repo location.** `coder dotfiles`' `--repo-dir` default is relative to
+  Coder's *global config directory*, not `$HOME`, so the clone lands at
+  `~/.config/coderv2/dotfiles` — `~/dotfiles` does not exist in the workspace.
+  `install.sh` locates itself via `BASH_SOURCE` and creates a `~/dotfiles`
+  symlink to its own directory. Every other file can then refer to
+  `~/dotfiles/...` and be correct on both machines, matching the Arch layout
+  where the repo genuinely lives there.
 - **Linking.** Reads `profiles/<profile>.links`. For each pair, if the target
   is already the correct symlink it is left alone; if it is a real file or
-  directory it is moved to `<name>.pre-dotfiles` first.
+  directory it is moved aside to `<name>.pre-dotfiles` (suffixed `.1`, `.2`, …
+  if that name is taken, so a backup is never overwritten). A stale symlink is
+  simply removed rather than backed up.
 - **Setup steps.** Sources `headless/setup/*.sh` in numeric order. Each guards
   on a version or existence check, so a restart costs roughly two seconds.
 - **`--upgrade`.** Re-resolves the latest release of every `~/.local` tool and
@@ -355,8 +363,11 @@ installed for manual invocation only.
 - **Install**: `curl -fsSL https://herdr.dev/install.sh | sh`, which places the
   binary in `~/.local/bin`. Skipped when already present; `herdr update`
   handles later upgrades.
-- **Config**: `~/.config/herdr/config.toml` → `headless/herdr.toml`. Current
-  settings verbatim — `onboarding = false`, `ui.toast.delivery = "system"`,
+- **Config**: `~/.config/herdr/config.toml` → `headless/herdr.toml`. TOML has no
+  include mechanism, so `arch/herdr.toml` and `headless/herdr.toml` are two
+  complete 14-line files differing only in `[theme] name`; there is no shared
+  base fragment to merge. Current settings verbatim — `onboarding = false`,
+  `ui.toast.delivery = "system"`,
   `ui.show_agent_labels_on_pane_borders = true`,
   `ui.agent_panel_sort = "spaces"`, `experimental.kitty_graphics = true` — with
   `[theme] name = "catppuccin"`. Verified against the 0.8.0 binary that
