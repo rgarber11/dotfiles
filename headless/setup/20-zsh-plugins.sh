@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Five plugins, plain git clones. No plugin manager: for a fixed set this small
 # a manager only adds startup cost and indirection. ~/.local is the PVC, so
 # these clone once and persist; `dotup` pulls them.
@@ -21,6 +22,13 @@ for url in "${ZSH_PLUGINS[@]}"; do
       git -C "$dir" pull --quiet --ff-only || warn "could not update $name"
     fi
   else
+    # An interrupted clone leaves a directory with no .git, and git refuses to
+    # clone into a non-empty directory -- which would fail identically on every
+    # subsequent workspace start. Nothing in there is worth keeping, so clear it.
+    if [ -d "$dir" ]; then
+      warn "removing incomplete $name checkout"
+      rm -rf "$dir"
+    fi
     info "cloning $name"
     git clone --depth=1 --quiet "$url" "$dir" || warn "could not clone $name"
   fi
