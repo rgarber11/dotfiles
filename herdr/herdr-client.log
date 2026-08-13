@@ -1,0 +1,45 @@
+2026-08-11T15:48:27.358897Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=104149
+2026-08-11T15:48:27.358937Z  INFO herdr::client: connecting to server path=/home/rgarber11/.config/herdr/herdr-client.sock
+2026-08-11T15:48:27.408166Z  INFO herdr::client: handshake succeeded version=19 encoding=SemanticFrame
+2026-08-11T15:50:16.139627Z  INFO herdr::logging: herdr exiting event="app.shutdown" subsystem="client" outcome="completed" pid=104149
+2026-08-11T17:08:33.090329Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=213809
+2026-08-11T17:08:33.090347Z  INFO herdr::client: connecting to server path=/home/rgarber11/.config/herdr/herdr-client.sock
+2026-08-11T17:08:33.131786Z  INFO herdr::client: handshake succeeded version=19 encoding=SemanticFrame
+2026-08-11T17:13:31.175533Z  INFO herdr::logging: herdr exiting event="app.shutdown" subsystem="client" outcome="completed" pid=213809
+2026-08-11T17:14:08.830427Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=220410
+2026-08-11T17:14:08.830443Z  INFO herdr::client: connecting to server path=/home/rgarber11/.config/herdr/herdr-client.sock
+2026-08-11T17:14:08.860808Z  INFO herdr::client: handshake succeeded version=19 encoding=SemanticFrame
+2026-08-11T17:41:09.503071Z  INFO herdr::logging: herdr exiting event="app.shutdown" subsystem="client" outcome="completed" pid=220410
+2026-08-11T17:41:11.822601Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=242327
+2026-08-11T17:41:11.822621Z  INFO herdr::client: connecting to server path=/home/rgarber11/.config/herdr/herdr-client.sock
+2026-08-11T17:41:11.875172Z  INFO herdr::client: handshake succeeded version=19 encoding=SemanticFrame
+2026-08-12T14:07:48.339758Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=12245
+2026-08-12T14:07:48.339782Z  INFO herdr::client: connecting to server path=/home/rgarber11/.config/herdr/herdr-client.sock
+2026-08-12T14:07:48.501219Z  INFO herdr::client: handshake succeeded version=19 encoding=SemanticFrame
+2026-08-12T20:12:55.187725Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=502850
+2026-08-12T20:12:55.187777Z  INFO herdr::client: connecting to server path=/home/rgarber11/.config/herdr/herdr-client.sock
+2026-08-12T20:12:55.191778Z  INFO herdr::client: handshake succeeded version=19 encoding=SemanticFrame
+2026-08-12T20:13:25.600752Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=506401
+2026-08-12T20:13:25.600820Z  INFO herdr::client: connecting to server path=/home/rgarber11/.config/herdr/herdr-client.sock
+2026-08-12T20:13:25.604729Z  INFO herdr::client: handshake succeeded version=19 encoding=SemanticFrame
+2026-08-12T21:46:26.886178Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=697021
+2026-08-12T21:46:26.886261Z  INFO herdr::client: connecting to server path=/tmp/herdr-remote-696639-richard-worktree-2.coder-default.sock
+2026-08-12T21:46:27.395476Z  INFO herdr::client: handshake succeeded version=19 encoding=TerminalAnsi
+2026-08-12T21:47:11.714309Z  INFO herdr::logging: herdr exiting event="app.shutdown" subsystem="client" outcome="completed" pid=697021
+2026-08-12T21:47:16.026929Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=697891
+2026-08-12T21:47:16.026952Z  INFO herdr::client: connecting to server path=/tmp/herdr-remote-697467-richard-worktree-2.coder-default.sock
+2026-08-12T21:47:16.385727Z  INFO herdr::client: handshake succeeded version=19 encoding=TerminalAnsi
+2026-08-12T21:47:22.022625Z  INFO herdr::logging: herdr exiting event="app.shutdown" subsystem="client" outcome="completed" pid=697891
+2026-08-12T21:48:25.384863Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=698858
+2026-08-12T21:48:25.384914Z  INFO herdr::client: connecting to server path=/tmp/herdr-remote-698466-richard-worktree-2.coder-default.sock
+2026-08-12T21:48:25.604763Z  INFO herdr::client: handshake succeeded version=19 encoding=TerminalAnsi
+2026-08-12T22:21:37.153262Z  INFO herdr::logging: herdr exiting event="app.shutdown" subsystem="client" outcome="completed" pid=698858
+2026-08-12T22:26:40.682349Z  INFO herdr::logging: herdr exiting event="app.shutdown" subsystem="client" outcome="completed" pid=12245
+2026-08-13T14:03:49.746156Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=6913
+2026-08-13T14:03:49.748003Z  INFO herdr::client: connecting to server path=/tmp/herdr-remote-6520-richard-worktree-2.coder-default.sock
+2026-08-13T14:03:50.291973Z  INFO herdr::client: handshake succeeded version=19 encoding=TerminalAnsi
+2026-08-13T14:04:15.877883Z  INFO herdr::logging: herdr exiting event="app.shutdown" subsystem="client" outcome="completed" pid=6913
+2026-08-13T14:06:25.823889Z  INFO herdr::logging: herdr starting event="app.startup" subsystem="client" outcome="started" pid=7749
+2026-08-13T14:06:25.823902Z  INFO herdr::client: connecting to server path=/home/rgarber11/.config/herdr/herdr-client.sock
+2026-08-13T14:06:25.995403Z  INFO herdr::client: handshake succeeded version=19 encoding=SemanticFrame
+2026-08-13T14:06:50.100666Z  INFO herdr::logging: herdr exiting event="app.shutdown" subsystem="client" outcome="completed" pid=7749

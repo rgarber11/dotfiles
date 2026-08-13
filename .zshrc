@@ -7,70 +7,6 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
-# If you come from bash you might have to change your $PATH.
-# export PATH=$HOME/bin:/usr/local/bin:$PATH
-
-# Path to your oh-my-zsh installation.
-export ZSH="/home/rgarber11/.oh-my-zsh"
-
-# Set name of the theme to load --- if set to "random", it will
-# load a random theme each time oh-my-zsh is loaded, in which case,
-# to know which specific one was loaded, run: echo $RANDOM_THEME
-# See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
-ZSH_THEME="powerlevel10k/powerlevel10k"
-
-# Set list of themes to pick from when loading at random
-# Setting this variable when ZSH_THEME=random will cause zsh to load
-# a theme from this variable instead of looking in $ZSH/themes/
-# If set to an empty array, this variable will have no effect.
-# ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
-
-# Uncomment the following line to use case-sensitive completion.
-# CASE_SENSITIVE="true"
-
-# Uncomment the following line to use hyphen-insensitive completion.
-# Case-sensitive completion must be off. _ and - will be interchangeable.
-# HYPHEN_INSENSITIVE="true"
-
-# Uncomment one of the following lines to change the auto-update behavior
-# zstyle ':omz:update' mode disabled  # disable automatic updates
-# zstyle ':omz:update' mode auto      # update automatically without asking
-# zstyle ':omz:update' mode reminder  # just remind me to update when it's time
-
-# Uncomment the following line to change how often to auto-update (in days).
-# zstyle ':omz:update' frequency 13
-
-# Uncomment the following line if pasting URLs and other text is messed up.
-# DISABLE_MAGIC_FUNCTIONS="true"
-
-# Uncomment the following line to disable colors in ls.
-# DISABLE_LS_COLORS="true"
-
-# Uncomment the following line to disable auto-setting terminal title.
-# DISABLE_AUTO_TITLE="true"
-
-# Uncomment the following line to enable command auto-correction.
-ENABLE_CORRECTION="true"
-
-# Uncomment the following line to display red dots whilst waiting for completion.
-# You can also set it to another string to have that shown instead of the default red dots.
-# e.g. COMPLETION_WAITING_DOTS="%F{yellow}waiting...%f"
-# Caution: this setting can cause issues with multiline prompts in zsh < 5.7.1 (see #5765)
-# COMPLETION_WAITING_DOTS="true"
-
-# Uncomment the following line if you want to disable marking untracked files
-# under VCS as dirty. This makes repository status check for large repositories
-# much, much faster.
-# DISABLE_UNTRACKED_FILES_DIRTY="true"
-
-# Uncomment the following line if you want to change the command execution time
-# stamp shown in the history command output.
-# You can set one of the optional three formats:
-# "mm/dd/yyyy"|"dd.mm.yyyy"|"yyyy-mm-dd"
-# or set a custom format using the strftime function format specifications,
-# see 'man strftime' for details.
-# HIST_STAMPS="mm/dd/yyyy"
-
 # Would you like to use another custom folder than $ZSH/custom?
 # ZSH_CUSTOM=/path/to/new-custom-folder
 
@@ -81,46 +17,29 @@ ENABLE_CORRECTION="true"
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(git archlinux colorize common-aliases zsh-interactive-cd)
 
+export ZSH="$HOME/.oh-my-zsh"
 source $ZSH/oh-my-zsh.sh
+
 source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
 
-# User configuration
+source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme
+setopt autocd extendedglob
 
-# export MANPATH="/usr/local/man:$MANPATH"
+unsetopt beep nomatch notify
 
-# You may need to manually set your language environment
-# export LANG=en_US.UTF-8
-export LM_LICENSE_FILE=/home/rgarber11/.config/questa/LR-067885_License.dat
-
-# Preferred editor for local and remote sessions
- if [[ -n $SSH_CONNECTION ]]; then
-   export EDITOR='vim'
- else
-   export EDITOR='nvim'
- fi
-ZSH_COLORIZE_STYLE="colorful"
-# Compilation flags
-export ARCHFLAGS="-arch x86_64"
-ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=23'
-# Set personal aliases, overriding those provided by oh-my-zsh libs,
-# plugins, and themes. Aliases can be placed here, though oh-my-zsh
-# users are encouraged to define aliases within the ZSH_CUSTOM folder.
-# For a full list of active aliases, run `alias`.
+bindkey -e
+# Match standard xterm Alt+arrow sequences to Emacs word motion.
+bindkey -M emacs '\e[1;3C' forward-word
+bindkey -M emacs '\e[1;3D' backward-word
 #
-[[ "$(cat /proc/$PPID/comm)" =~ "kitty" ]] && alias ssh="kitten ssh"
-# Example aliases
-# alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"
-
-# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
-
-export QSYS_ROOTDIR="/home/rgarber11/.cache/yay/quartus-free/pkg/quartus-free-quartus/opt/intelFPGA/24.1/quartus/sopc_builder/bin"
-zshcache_time="$(date +%s%N)"
-
+# Path to your Oh My Zsh installation.
+fpath=(~/.local/share/zsh/site-functions $fpath)
+zstyle :compinstall filename '/home/rgarber11/.zshrc'
+# completions
+autoload -Uz compinit
+compinit
 autoload -Uz add-zsh-hook
-
 rehash_precmd() {
   if [[ -a /var/cache/zsh/pacman ]]; then
     local paccache_time="$(date -r /var/cache/zsh/pacman +%s%N)"
@@ -130,28 +49,47 @@ rehash_precmd() {
     fi
   fi
 }
-function format_python_comment() {
-echo "$1" | fmt -78 | sed "s/.*/# \0/"
-}
-sdiff() {
-  diff --color=always -- "$1" "$2" | less -R
-}
 add-zsh-hook -Uz precmd rehash_precmd
-set -o extendedglob
-export VCPKG_ROOT=/home/rgarber11/.local/bin/vcpkg
-PATH="${VCPKG_ROOT}:/home/rgarber11/.config/emacs/bin:/home/rgarber11/perl5/bin${PATH:+:${PATH}}:$HOME/go/bin"; export PATH;
-PERL5LIB="/home/rgarber11/perl5/lib/perl5${PERL5LIB:+:${PERL5LIB}}"; export PERL5LIB;
-PERL_LOCAL_LIB_ROOT="/home/rgarber11/perl5${PERL_LOCAL_LIB_ROOT:+:${PERL_LOCAL_LIB_ROOT}}"; export PERL_LOCAL_LIB_ROOT;
-PERL_MB_OPT="--install_base \"/home/rgarber11/perl5\""; export PERL_MB_OPT;
-PERL_MM_OPT="INSTALL_BASE=/home/rgarber11/perl5"; export PERL_MM_OPT;
-alias give_fortune="if (( RANDOM % 10 < 3 )); then fortune ru | cowsay; else fortune -a | cowsay; fi"
+# User configuration
+
+# export MANPATH="/usr/local/man:$MANPATH"
+
+# You may need to manually set your language environment
+# export LANG=en_US.UTF-8
+
+# Preferred editor for local and remote sessions
+# if [[ -n $SSH_CONNECTION ]]; then
+#   export EDITOR='vim'
+# else
+#   export EDITOR='nvim'
+# fi
+
+ZSH_COLORIZE_STYLE="colorful"
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=23'
+[[ "$(cat /proc/$PPID/comm)" =~ "kitty" ]] && alias ssh="kitten ssh"
+export EDITOR=nvim
+export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH:$HOME/Android/Sdk/platform-tools:$HOME/Android/Sdk/emulator
+export ANDROID_HOME="$HOME/Android/Sdk"
+
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+give_fortune() {
+  if (( RANDOM % 10 < 3 )); then
+    fortune ru | cowsay
+  else
+    fortune -a | cowsay
+  fi
+}
 alias new_mirrorlist="reflector -n 50 -c US --delay 0.25 -f 20 --sort rate > mirrorlist.new"
+cgt() {
+  cd "$(git rev-parse --show-toplevel)" || return
+}
+monitor_app() {
+adb logcat --pid=$(adb shell pidof com.voiceerp.voiceerp)
+}
 
 ffmpeg_all_info() {
   ffprobe -v quiet -of json -show_entries stream:format -show_chapters file:"$1"
 }
-VCPKG_DOWNLOADS=/home/rgarber11/.cache/vcpkg
-export GHCUP_USE_XDG_DIRS=1
 delete_node_modules() {
   echo -n "Are you sure you want to delete all node_modules directories (CHECK THE DIRECTORY YOU'RE IN!!!)? (y/n): "
   read REPLY
@@ -160,24 +98,93 @@ delete_node_modules() {
     echo "Operation cancelled."
     return 1
   fi
-find . -name "node_modules" -type d -prune -exec rm -rf '{}' \;
+  find . -name "node_modules" -type d -prune -exec rm -rf '{}' \;
 }
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/home/rgarber11/miniforge3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/home/rgarber11/miniforge3/etc/profile.d/conda.sh" ]; then
-        . "/home/rgarber11/miniforge3/etc/profile.d/conda.sh"
-    else
-        export PATH="/home/rgarber11/miniforge3/bin:$PATH"
-    fi
-fi
-unset __conda_setup
-
-if [ -f "/home/rgarber11/miniforge3/etc/profile.d/mamba.sh" ]; then
-    . "/home/rgarber11/miniforge3/etc/profile.d/mamba.sh"
-fi
-export ANDROID_HOME="/home/rgarber11/Android/Sdk"
-# <<< conda initialize <<<
+gpt_code() {
+  local original_kitty_colors
+  original_kitty_colors=$(kitty @ get-colors) || return
+  {
+    kitty @ set-colors  "~/.config/kitty/kitty-themes/Catppuccin-Mocha.conf"
+    kitty @ set-tab-title "GPT Code"
+     env \
+      CLAUDE_CONFIG_DIR="$HOME/.config/claude-other/" \
+      ANTHROPIC_BASE_URL="http://127.0.0.1:8317" \
+      ENABLE_CLAUDEAI_MCP_SERVERS=false \
+      DISABLE_TELEMETRY=1 \
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+      ANTHROPIC_AUTH_TOKEN="rKPV+ZYXtt893+JCEHrFGIhd1UO9/zJyvPR4LOxQCcOS9xQ3jGjqP/M5S50j1MGDMdqmGAnAammJfy+3EwqxIg==" \
+      ANTHROPIC_DEFAULT_OPUS_MODEL="gpt-5.6-sol" \
+      ANTHROPIC_DEFAULT_SONNET_MODEL="gpt-5.6-terra" \
+      ANTHROPIC_DEFAULT_HAIKU_MODEL="gpt-5.6-luna" \
+      claude --model gpt-5.6-sol
+  } always {
+    kitty @ set-colors <(print -r -- "$original_kitty_colors")
+    kitty @ set-tab-title ""
+  }
+}
+herdr_remote() {
+  local original_kitty_colors
+  original_kitty_colors=$(kitty @ get-colors) || return 
+  {
+    kitty @ set-colors "~/.config/kitty/kitty-themes/Catppuccin-Mocha.conf"
+    herdr --remote richard-worktree-2.coder
+  } always {
+    kitty @ set-colors <(print -r -- "$original_kitty_colors")
+  }
+}
+command_stats() {
+local uname_output=$(uname -s)
+local awk_column=""
+local grep_command=""
+case "${uname_output}" in
+Linux*)
+  awk_column="{ print \"$1 \"\$3 }"
+  grep_command="[[:digit:]];$1[ \n]"
+  ;;
+Darwin*)
+  awk_column="{ print \"$1 \"\$2 }"
+  grep_command="^$1[ \n]"
+  ;;
+*)
+  echo "Unsupported OS: ${uname_output}"
+  return 1
+  ;;
+esac
+  grep -E "$grep_command" ~/.zsh_history | awk "$awk_column"  | sort | uniq -c | sort -nr 
+}
+unzip_into() {
+  unzip "$1" -d "${1:t:r}"
+}
+to_qr() {
+  if [[ -n "$1" ]]; then
+    qrencode -o - "$1" | chafa -f kitty -
+  elif [[ ! -t 0 ]]; then
+    cat | qrencode -o -  | chafa -f kitty -
+  else
+    echo "Usage: to_qr <string> (or pipe input to it)"
+    return 1
+  fi
+}
+refresh_git_branch() {
+  declare -a commits
+  commits=$(git rev-list HEAD)
+  local branches_that_head_has=$(git branch --contains HEAD)
+  for commit in $commits; do
+    branches=$(git branch --contains $commit)
+    echo "$branches"
+    for branch in $branches; do
+      if [[ $branches_that_head_has == *"$branch"* ]]; then
+        continue
+      fi
+      echo "$branch"
+      break 2
+    done
+done
+    
+}
+export NODE_OPTIONS="--max_old_space_size=8196 --stack-trace-limit=1000"
+. /usr/share/nvm/init-nvm.sh
+ ENABLE_CORRECTION="true"
+ setopt nocorrectall; setopt correct;
+ CORRECT_IGNORE=".sst|.expo"
+ CORRECT_IGNORE_FILE=".ssh|.expo"
