@@ -49,3 +49,21 @@ if command -v nvim >/dev/null 2>&1 && [ ! -f "$BOOTSTRAP_MARKER" ]; then
     warn "neovim bootstrap incomplete ($got/$want plugins); will retry next start"
   fi
 fi
+
+# lazy.nvim rewrites lazy-lock.json during restore: init.lua bootstraps lazy
+# itself with `git clone --branch=stable`, so lazy's own commit is whatever
+# stable is today rather than the pinned one, and restore records the
+# difference. ~/.config/nvim symlinks into the cloned repo, so that leaves a
+# modified tracked file there and the next `coder dotfiles` pull conflicts.
+# The desktop's lockfile is canonical, so put it back.
+#
+# The inner check is its own `if`, not `cmd && info`: when this block is the
+# last thing executed in the file (it is), a failed checkout as a bare `&&`
+# list stops being exempt from `set -e` and aborts install.sh outright --
+# verified by triggering it with a non-git DOTFILES_DIR. Nesting the `if`
+# keeps a failed checkout a plain false condition instead.
+if ! git -C "$DOTFILES_DIR" diff --quiet -- shared/nvim/lazy-lock.json 2>/dev/null; then
+  if git -C "$DOTFILES_DIR" checkout -- shared/nvim/lazy-lock.json 2>/dev/null; then
+    info "restored lazy-lock.json (lazy rewrote it during bootstrap)"
+  fi
+fi
