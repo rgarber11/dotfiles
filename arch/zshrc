@@ -1,5 +1,9 @@
 #!/bin/zsh
-# Powerlevel10k instant prompt. Keep near the top; console output goes below.
+# Powerlevel10k instant prompt. Keep near the top. Console output later in
+# this file (the greeting, notably) still counts as "during init" from p10k's
+# perspective regardless of where it sits in this file -- see
+# greet_on_first_prompt (shared/zsh/functions.zsh), called at the bottom, for
+# how that's actually handled.
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
@@ -88,4 +92,4 @@ herdr_remote() {
 
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
 
-give_fortune
+greet_on_first_prompt

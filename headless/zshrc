@@ -1,8 +1,11 @@
 # ~/.zshrc -- Coder workspace (headless profile). Managed by ~/dotfiles.
 # Machine-local overrides belong in ~/.zshrc.local, which is gitignored.
 
-# Powerlevel10k instant prompt. Must stay near the top; anything that writes to
-# the console (the greeting, notably) has to come after it.
+# Powerlevel10k instant prompt. Must stay near the top. Console output later
+# in this file (the greeting, notably) still counts as "during init" from
+# p10k's perspective regardless of where it sits in this file -- see
+# greet_on_first_prompt (shared/zsh/functions.zsh), called near the bottom,
+# for how that's actually handled.
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
@@ -43,5 +46,4 @@ alias dotup="$HOME/dotfiles/install.sh --upgrade"
 
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
 
-# Greeting last: it writes to the console, so it has to follow instant prompt.
-give_fortune
+greet_on_first_prompt
