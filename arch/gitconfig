@@ -1,16 +1,14 @@
+# Desktop git config. Identity, prefs and aliases live in the shared file;
+# only signing, the credential helper and difftastic are Arch-specific.
+[include]
+	path = /home/rgarber11/dotfiles/shared/git/common.gitconfig
 [user]
-	# Fill this in!
-[credential]
-	helper = cache
-[core]
-	autocrlf = input
+	signingkey = /home/rgarber11/.ssh/id_rsa.pub
 [commit]
 	gpgsign = true
 [gpg]
 	format = ssh
-[push]
-	autoSetupRemote = true
-[alias]
-	pushf = push --force-with-lease
-	append-commit = commit --amend --date=now --no-edit
-	force-pull = pull --rebase --autostash
+[credential]
+	helper = cache
+[diff]
+	external = difft
