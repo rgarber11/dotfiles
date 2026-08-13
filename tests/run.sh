@@ -47,7 +47,11 @@ cp -r /repo ~/.config/coderv2/dotfiles
 # (or anything it runs, like `:Lazy update`) writing INTO the clone. A flat
 # zero would false-fail on a host with an in-progress edit to install.sh, so
 # we compare this against the same measurement taken after install.sh below.
-REPO_STATUS_BEFORE="$(git -C ~/.config/coderv2/dotfiles status --porcelain | wc -l)"
+# -uno: only tracked modifications count as "install.sh modified the clone".
+# cp -r (unlike the real `coder dotfiles` clone) carries over ignored files
+# from the host working tree, e.g. an editor's untracked scratch directory;
+# those aren't something install.sh writing into the clone would produce.
+REPO_STATUS_BEFORE="$(git -C ~/.config/coderv2/dotfiles status --porcelain -uno | wc -l)"
 chmod +x ~/.config/coderv2/dotfiles/install.sh
 # Seed a real pre-existing file so the backup-before-overwrite path is
 # actually exercised; on a fresh volume ~/.zshrc doesn't exist yet, so
@@ -56,8 +60,14 @@ chmod +x ~/.config/coderv2/dotfiles/install.sh
 # alone.
 [ -e ~/.zshrc ] || echo '# pre-existing user file' > ~/.zshrc
 ~/.config/coderv2/dotfiles/install.sh
-REPO_STATUS_AFTER="$(git -C ~/.config/coderv2/dotfiles status --porcelain | wc -l)"
+REPO_STATUS_AFTER="$(git -C ~/.config/coderv2/dotfiles status --porcelain -uno | wc -l)"
 echo "repo_status_delta=$((REPO_STATUS_AFTER - REPO_STATUS_BEFORE))"
+# /etc/passwd lives in the container filesystem, not the persisted /home/coder
+# volume, so it must be asserted inside THIS container, right after install.sh
+# ran -- a separate podman run would see the image's default shell instead.
+# id -un, not $USER: $USER is unset here (the same pitfall that broke
+# 50-shell.sh).
+echo "shell=$(getent passwd "$(id -un)" | cut -d: -f7)"
 SH
 }
 
@@ -79,8 +89,7 @@ echo "gitconfig_first_line=$(head -1 ~/.gitconfig 2>/dev/null)"
 echo "git_email=$(git config --get user.email)"
 echo "zsh_ident=$(zsh -ic 'git var GIT_AUTHOR_IDENT' 2>/dev/null | tail -1)"
 echo "bash_ident=$(bash -lc 'git var GIT_AUTHOR_IDENT' 2>/dev/null | tail -1)"
-echo "shell=$(getent passwd coder | cut -d: -f7)"
-echo "backups=$(ls -d ~/*.pre-dotfiles* 2>/dev/null | wc -l)"
+echo "backups=$(find ~ -maxdepth 1 -name '*.pre-dotfiles*' | wc -l)"
 SH
 )"
 echo "$CHECKS"
@@ -96,7 +105,7 @@ assert_contains "zsh identity beats the agent env" \
 assert_contains "bash identity beats the agent env" \
   "bash_ident=Richard Garber <9834847+rgarber11@users.noreply.github.com>" "$CHECKS"
 assert_not_contains "the wrong address never wins" "wrong@example.com" "$CHECKS"
-assert_contains "login shell is zsh"      "shell=/usr/bin/zsh" "$CHECKS"
+assert_contains "login shell is zsh"      "shell=/usr/bin/zsh" "$FIRST"
 assert_contains "zshrc symlinks into the repo" \
   "zshrc=/home/coder/.config/coderv2/dotfiles/headless/zshrc" "$CHECKS"
 assert_contains "nvim config symlinks into the repo" \
@@ -120,17 +129,16 @@ assert_contains "install.sh does not modify the dotfiles clone (restart)" "repo_
 AFTER="$(in_workspace <<'SH'
 export PATH="$HOME/.local/bin:$PATH"
 echo "nvim=$(command -v nvim || echo none)"
-echo "shell=$(getent passwd coder | cut -d: -f7)"
 echo "zshrc=$(readlink -f ~/.zshrc || echo none)"
 echo "nvimcfg=$(readlink -f ~/.config/nvim || echo none)"
-echo "backups=$(ls -d ~/*.pre-dotfiles* 2>/dev/null | wc -l)"
+echo "backups=$(find ~ -maxdepth 1 -name '*.pre-dotfiles*' | wc -l)"
 echo "bashrc_blocks=$(grep -cF '# >>> dotfiles: coder git identity >>>' ~/.bashrc)"
 echo "profile_blocks=$(grep -cF '# >>> dotfiles: coder git identity >>>' ~/.profile)"
 SH
 )"
 echo "$AFTER"
 assert_contains "nvim survived the restart" "nvim=/home/coder/.local/bin/nvim" "$AFTER"
-assert_contains "chsh re-applied after restart" "shell=/usr/bin/zsh" "$AFTER"
+assert_contains "chsh re-applied after restart" "shell=/usr/bin/zsh" "$SECOND"
 assert_contains "zshrc symlink survived the restart" \
   "zshrc=/home/coder/.config/coderv2/dotfiles/headless/zshrc" "$AFTER"
 assert_contains "nvim config symlink survived the restart" \
