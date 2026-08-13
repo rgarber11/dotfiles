@@ -49,15 +49,94 @@ unzip_into() {
   unzip "$1" -d "${1:t:r}"
 }
 
-to_qr() {
-  if [[ -n "$1" ]]; then
-    qrencode -o - "$1" | chafa -f kitty -
-  elif [[ ! -t 0 ]]; then
-    cat | qrencode -o - | chafa -f kitty -
+# Does this terminal implement the kitty graphics protocol? Asks it directly,
+# the way kitty documents, rather than guessing from $TERM -- multiplexers and
+# ssh make $TERM an unreliable proxy for what the far end can actually draw.
+#
+# The graphics query is paired with a Primary DA request: terminals that don't
+# implement graphics simply never answer the first, but every terminal answers
+# DA, so the read terminates on the DA reply instead of hanging for a timeout.
+# Cached per shell -- the answer cannot change mid-session.
+typeset -g _to_qr_kitty_graphics_support=""
+_supports_kitty_graphics() {
+  if [[ -n "$_to_qr_kitty_graphics_support" ]]; then
+    [[ "$_to_qr_kitty_graphics_support" == 1 ]]
+    return
+  fi
+
+  # Querying is meaningless if we're not actually attached to a terminal
+  # (piped/redirected output) -- default to "unsupported" without touching
+  # the tty at all.
+  if [[ ! -t 1 ]]; then
+    return 1
+  fi
+
+  local old_stty
+  old_stty=$(stty -g 2>/dev/null) || return 1
+
+  # Open the tty once and read from that fd rather than re-opening /dev/tty
+  # on every read -- re-opening it per-read is what makes a signal landing
+  # mid-read wedge the shell (confirmed by hand: a SIGINT trap that fires
+  # while a `read ... </dev/tty` is blocked never regains control and hangs
+  # forever; the exact same loop reading from a single already-open fd
+  # returns cleanly the instant the trap runs).
+  local ttyfd
+  { exec {ttyfd}<>/dev/tty } 2>/dev/null || return 1
+
+  # No matter how this function exits -- including a ^C landing mid-query --
+  # the tty must come back out of raw mode.
+  trap 'stty "$old_stty" 2>/dev/null; exec {ttyfd}<&-; trap - INT; return 130' INT
+
+  # raw/-echo so the reply is never drawn on screen and arrives byte-at-a-
+  # time without line buffering; min 0 time 3 bounds each single-byte read
+  # to ~0.3s so a silent terminal can't stall us for long.
+  stty raw -echo min 0 time 3 2>/dev/null
+
+  # A 1x1 pixel transmission "query" action (a=q -- validates without
+  # displaying anything), immediately followed by a Primary Device
+  # Attributes request.
+  print -nu $ttyfd $'\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\\x1b[c'
+
+  local reply="" chunk
+  local -i tries=0 deadline=$(( SECONDS + 2 ))
+  while (( tries < 100 && SECONDS < deadline )); do
+    IFS= read -u $ttyfd -r -k 1 -t 0.3 chunk || break
+    reply+="$chunk"
+    (( tries++ ))
+    # A Primary DA reply is a CSI sequence that always ends in a bare 'c';
+    # once we've seen it, neither query has anything left to send.
+    [[ "$reply" == *$'\x1b['*c ]] && break
+  done
+
+  exec {ttyfd}<&-
+  stty "$old_stty" 2>/dev/null
+  trap - INT
+
+  # A supporting terminal answers the graphics query with \e_Gi=31;...\e\\
+  # (OK, or an error -- either proves it parsed and answered in-protocol).
+  if [[ "$reply" == *$'\x1b_G'*';'* ]]; then
+    _to_qr_kitty_graphics_support=1
   else
+    _to_qr_kitty_graphics_support=0
+  fi
+
+  [[ "$_to_qr_kitty_graphics_support" == 1 ]]
+}
+
+to_qr() {
+  if [[ -z "$1" && -t 0 ]]; then
     echo "Usage: to_qr <string> (or pipe input to it)"
     return 1
   fi
+
+  local size="${TO_QR_SIZE:-40x40}"
+  local fmt="symbols"
+  _supports_kitty_graphics && fmt="kitty"
+
+  local -a qr_args
+  [[ -n "$1" ]] && qr_args=("$1")
+
+  qrencode -o - "${qr_args[@]}" | chafa -f "$fmt" --size "$size" -
 }
 
 refresh_git_branch() {
