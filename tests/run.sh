@@ -124,7 +124,8 @@ echo "shell=$(getent passwd coder | cut -d: -f7)"
 echo "zshrc=$(readlink -f ~/.zshrc || echo none)"
 echo "nvimcfg=$(readlink -f ~/.config/nvim || echo none)"
 echo "backups=$(ls -d ~/*.pre-dotfiles* 2>/dev/null | wc -l)"
-echo "bashrc_blocks=$(grep -c 'dotfiles: coder git identity' ~/.bashrc)"
+echo "bashrc_blocks=$(grep -cF '# >>> dotfiles: coder git identity >>>' ~/.bashrc)"
+echo "profile_blocks=$(grep -cF '# >>> dotfiles: coder git identity >>>' ~/.profile)"
 SH
 )"
 echo "$AFTER"
@@ -136,5 +137,6 @@ assert_contains "nvim config symlink survived the restart" \
   "nvimcfg=/home/coder/.config/coderv2/dotfiles/shared/nvim" "$AFTER"
 assert_contains "no duplicate backup on restart" "backups=1" "$AFTER"
 assert_contains "no duplicate bashrc block" "bashrc_blocks=1" "$AFTER"
+assert_contains "no duplicate profile block" "profile_blocks=1" "$AFTER"
 
 summary
