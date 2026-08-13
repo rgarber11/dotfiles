@@ -8,7 +8,9 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
 fi
 
 export EDITOR=nvim
-export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+# /usr/games is where Debian/Ubuntu put fortune and cowsay, and it is not on
+# the default PATH -- without it give_fortune silently no-ops.
+export PATH="$HOME/.local/bin:$HOME/bin:$PATH:/usr/games"
 export NODE_OPTIONS="--max_old_space_size=8196 --stack-trace-limit=1000"
 
 ZSH_PLUGIN_DIR="$HOME/.local/share/zsh/plugins"

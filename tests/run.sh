@@ -62,6 +62,14 @@ chmod +x ~/.config/coderv2/dotfiles/install.sh
 ~/.config/coderv2/dotfiles/install.sh
 REPO_STATUS_AFTER="$(git -C ~/.config/coderv2/dotfiles status --porcelain -uno | wc -l)"
 echo "repo_status_delta=$((REPO_STATUS_AFTER - REPO_STATUS_BEFORE))"
+# fortune and cowsay come from 10-packages.sh's apt install, which -- like
+# everything else outside ~/.local -- lives in the container filesystem, not
+# the persisted /home/coder volume. The later CHECKS block runs in a fresh
+# container that never invoked install.sh, so /usr/games and these binaries
+# would simply not exist there regardless of the PATH fix; this must be
+# asserted inside THIS container, right after install.sh ran (same reasoning
+# as the /etc/passwd shell= check right below).
+echo "greeting=$(zsh -ic 'give_fortune' 2>/dev/null | head -1 | tr -d '\n' | cut -c1-20)"
 # /etc/passwd lives in the container filesystem, not the persisted /home/coder
 # volume, so it must be asserted inside THIS container, right after install.sh
 # ran -- a separate podman run would see the image's default shell instead.
@@ -90,6 +98,10 @@ echo "git_email=$(git config --get user.email)"
 echo "zsh_ident=$(zsh -ic 'git var GIT_AUTHOR_IDENT' 2>/dev/null | tail -1)"
 echo "bash_ident=$(bash -lc 'git var GIT_AUTHOR_IDENT' 2>/dev/null | tail -1)"
 echo "backups=$(find ~ -maxdepth 1 -name '*.pre-dotfiles*' | wc -l)"
+# nvim's binary and config symlink both persist under ~/.local and the repo
+# clone, so (unlike fortune/cowsay above) this is fine to check from a fresh
+# container.
+echo "colorscheme=$(nvim --headless -c 'echo g:colors_name' -c qa 2>&1 | tr -d '\r\n')"
 SH
 )"
 echo "$CHECKS"
@@ -105,7 +117,15 @@ assert_contains "zsh identity beats the agent env" \
 assert_contains "bash identity beats the agent env" \
   "bash_ident=Richard Garber <9834847+rgarber11@users.noreply.github.com>" "$CHECKS"
 assert_not_contains "the wrong address never wins" "wrong@example.com" "$CHECKS"
+assert_contains "nvim uses catppuccin mocha in the workspace" "colorscheme=catppuccin-mocha" "$CHECKS"
 assert_contains "login shell is zsh"      "shell=/usr/bin/zsh" "$FIRST"
+# assert_not_contains does a plain substring match, and "greeting=" is a
+# substring of "greeting=Some fortune text" just as much as of "greeting="
+# alone -- checking for the bare key would fail unconditionally. Instead
+# check for the key immediately followed by the newline the next echo
+# produces: that sequence only occurs when the value is empty. (greeting=
+# is asserted against $FIRST, not $CHECKS -- see the comment in install_run.)
+assert_not_contains "fortune greeting produces output" $'greeting=\n' "$FIRST"
 assert_contains "zshrc symlinks into the repo" \
   "zshrc=/home/coder/.config/coderv2/dotfiles/headless/zshrc" "$CHECKS"
 assert_contains "nvim config symlinks into the repo" \
