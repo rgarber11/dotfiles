@@ -101,7 +101,11 @@ echo "backups=$(find ~ -maxdepth 1 -name '*.pre-dotfiles*' | wc -l)"
 # nvim's binary and config symlink both persist under ~/.local and the repo
 # clone, so (unlike fortune/cowsay above) this is fine to check from a fresh
 # container.
-echo "colorscheme=$(nvim --headless -c 'echo g:colors_name' -c qa 2>&1 | tr -d '\r\n')"
+# io.write to stdout rather than `:echo` with 2>&1: in headless mode messages go
+# to stderr, which on a first launch also carries treesitter parser-download
+# progress -- that noise got concatenated into the captured value and failed the
+# assertion for reasons unrelated to the colorscheme.
+echo "colorscheme=$(nvim --headless -c 'lua io.write(vim.g.colors_name or "none")' -c qa 2>/dev/null | tr -d '\r\n')"
 SH
 )"
 echo "$CHECKS"
