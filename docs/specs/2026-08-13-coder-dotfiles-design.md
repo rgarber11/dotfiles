@@ -56,7 +56,7 @@ dotfiles/
 │   ├── zshrc
 │   ├── zshenv                 # unsets the agent's GIT_AUTHOR_*/GIT_COMMITTER_*
 │   ├── gitconfig              # headless-only git overrides
-│   ├── herdr.toml             # base.toml contents + theme = "catppuccin"
+│   ├── herdr.toml             # complete herdr config, theme = "catppuccin"
 │   └── setup/
 │       ├── 10-packages.sh
 │       ├── 20-zsh-plugins.sh
