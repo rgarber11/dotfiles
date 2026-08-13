@@ -33,7 +33,12 @@ if command -v fdfind >/dev/null 2>&1 && [ ! -e "$HOME/.local/bin/fd" ]; then
 fi
 
 # noble's tree-sitter-cli is 0.20.8; nvim-treesitter's main branch needs current.
+# --prefix ~/.local rather than a global install: npm's default prefix is the
+# root-owned /usr/local (EACCES as the coder user), and /usr is rebuilt from the
+# image on every restart, so a global install would silently reinstall forever.
+# ~/.local is the PVC, so this happens once.
 if needs_install tree-sitter; then
-  info "npm: installing tree-sitter-cli"
-  npm install -g tree-sitter-cli >/dev/null 2>&1 || warn "tree-sitter-cli install failed"
+  info "npm: installing tree-sitter-cli into ~/.local"
+  npm install -g --prefix "$HOME/.local" tree-sitter-cli >/dev/null 2>&1 \
+    || warn "tree-sitter-cli install failed"
 fi
