@@ -12,6 +12,10 @@ VOLUME=dotfiles-test-home
 # shellcheck source=tests/lib.sh
 source "$HERE/lib.sh"
 
+case "${1:-}" in
+  ""|--keep) ;;
+  *) echo "run.sh: unknown argument: $1" >&2; exit 2 ;;
+esac
 [ "${1:-}" = "--keep" ] || podman volume rm -f "$VOLUME" >/dev/null 2>&1 || true
 podman volume create "$VOLUME" >/dev/null 2>&1 || true
 podman build -q -t "$IMAGE" -f "$HERE/Containerfile" "$HERE" >/dev/null
@@ -39,8 +43,21 @@ set -e
 mkdir -p ~/.config/coderv2
 rm -rf ~/.config/coderv2/dotfiles
 cp -r /repo ~/.config/coderv2/dotfiles
+# Measured right after the clone, before install.sh runs: catches install.sh
+# (or anything it runs, like `:Lazy update`) writing INTO the clone. A flat
+# zero would false-fail on a host with an in-progress edit to install.sh, so
+# we compare this against the same measurement taken after install.sh below.
+REPO_STATUS_BEFORE="$(git -C ~/.config/coderv2/dotfiles status --porcelain | wc -l)"
 chmod +x ~/.config/coderv2/dotfiles/install.sh
+# Seed a real pre-existing file so the backup-before-overwrite path is
+# actually exercised; on a fresh volume ~/.zshrc doesn't exist yet, so
+# without this the backup logic would go untested. Idempotent: on the
+# second run ~/.zshrc is already install.sh's symlink, so this leaves it
+# alone.
+[ -e ~/.zshrc ] || echo '# pre-existing user file' > ~/.zshrc
 ~/.config/coderv2/dotfiles/install.sh
+REPO_STATUS_AFTER="$(git -C ~/.config/coderv2/dotfiles status --porcelain | wc -l)"
+echo "repo_status_delta=$((REPO_STATUS_AFTER - REPO_STATUS_BEFORE))"
 SH
 }
 
@@ -63,7 +80,7 @@ echo "git_email=$(git config --get user.email)"
 echo "zsh_ident=$(zsh -ic 'git var GIT_AUTHOR_IDENT' 2>/dev/null | tail -1)"
 echo "bash_ident=$(bash -lc 'git var GIT_AUTHOR_IDENT' 2>/dev/null | tail -1)"
 echo "shell=$(getent passwd coder | cut -d: -f7)"
-echo "repo_status=$(git -C ~/.config/coderv2/dotfiles status --porcelain | wc -l)"
+echo "backups=$(ls -d ~/*.pre-dotfiles* 2>/dev/null | wc -l)"
 SH
 )"
 echo "$CHECKS"
@@ -80,7 +97,12 @@ assert_contains "bash identity beats the agent env" \
   "bash_ident=Richard Garber <9834847+rgarber11@users.noreply.github.com>" "$CHECKS"
 assert_not_contains "the wrong address never wins" "wrong@example.com" "$CHECKS"
 assert_contains "login shell is zsh"      "shell=/usr/bin/zsh" "$CHECKS"
-assert_contains "dotfiles repo is clean"  "repo_status=0" "$CHECKS"
+assert_contains "zshrc symlinks into the repo" \
+  "zshrc=/home/coder/.config/coderv2/dotfiles/headless/zshrc" "$CHECKS"
+assert_contains "nvim config symlinks into the repo" \
+  "nvimcfg=/home/coder/.config/coderv2/dotfiles/shared/nvim" "$CHECKS"
+assert_contains "pre-existing zshrc was backed up, not clobbered" "backups=1" "$CHECKS"
+assert_contains "install.sh does not modify the dotfiles clone" "repo_status_delta=0" "$FIRST"
 
 echo
 echo "=== second install (new container, same home: simulates restart) ==="
@@ -93,11 +115,14 @@ assert_not_contains "neovim not re-downloaded"    "downloading nvim"      "$SECO
 assert_not_contains "difftastic not re-downloaded" "downloading difft"     "$SECOND"
 assert_not_contains "fastfetch not re-downloaded" "downloading fastfetch" "$SECOND"
 assert_not_contains "herdr not reinstalled"       "installing herdr"      "$SECOND"
+assert_contains "install.sh does not modify the dotfiles clone (restart)" "repo_status_delta=0" "$SECOND"
 
 AFTER="$(in_workspace <<'SH'
 export PATH="$HOME/.local/bin:$PATH"
 echo "nvim=$(command -v nvim || echo none)"
 echo "shell=$(getent passwd coder | cut -d: -f7)"
+echo "zshrc=$(readlink -f ~/.zshrc || echo none)"
+echo "nvimcfg=$(readlink -f ~/.config/nvim || echo none)"
 echo "backups=$(ls -d ~/*.pre-dotfiles* 2>/dev/null | wc -l)"
 echo "bashrc_blocks=$(grep -c 'dotfiles: coder git identity' ~/.bashrc)"
 SH
@@ -105,6 +130,11 @@ SH
 echo "$AFTER"
 assert_contains "nvim survived the restart" "nvim=/home/coder/.local/bin/nvim" "$AFTER"
 assert_contains "chsh re-applied after restart" "shell=/usr/bin/zsh" "$AFTER"
+assert_contains "zshrc symlink survived the restart" \
+  "zshrc=/home/coder/.config/coderv2/dotfiles/headless/zshrc" "$AFTER"
+assert_contains "nvim config symlink survived the restart" \
+  "nvimcfg=/home/coder/.config/coderv2/dotfiles/shared/nvim" "$AFTER"
+assert_contains "no duplicate backup on restart" "backups=1" "$AFTER"
 assert_contains "no duplicate bashrc block" "bashrc_blocks=1" "$AFTER"
 
 summary
