@@ -43,3 +43,15 @@ EOF
     info "added git identity block to $(basename "$rc")"
   fi
 done
+
+# diff.external has no graceful degradation: if difft is missing, git does not
+# fall back, it fails every `git diff` outright with "external diff died". Since
+# the difftastic step can legitimately fail on a network blip, only enable it
+# once the binary is actually there -- and clear it if it ever goes missing, so
+# a workspace never ends up unable to diff.
+if command -v difft >/dev/null 2>&1; then
+  git config --global diff.external difft
+else
+  git config --global --unset-all diff.external 2>/dev/null || true
+  warn "difft not installed; leaving diff.external unset so git diff keeps working"
+fi
