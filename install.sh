@@ -26,7 +26,9 @@ EOF
 while [ $# -gt 0 ]; do
   case "$1" in
     --profile)   PROFILE="${2:?--profile needs a value}"; shift 2 ;;
-    --profile=*) PROFILE="${1#*=}"; shift ;;
+    --profile=*) PROFILE="${1#*=}"
+                 [ -n "$PROFILE" ] || { echo "install.sh: --profile= needs a value" >&2; exit 2; }
+                 shift ;;
     --upgrade)   UPGRADE=1; shift ;;
     -h|--help)   usage; exit 0 ;;
     *)           echo "install.sh: unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -77,6 +79,9 @@ link_one() {   # $1 = target relative to $HOME, $2 = source relative to $DOTFILE
     return 0
   fi
   mkdir -p "$(dirname "$target")"
+  # readlink -f on a symlink through a now-missing directory can print nothing;
+  # an empty-vs-nonempty comparison then correctly falls through as "not our
+  # link" and gets relinked below.
   if [ -L "$target" ] && [ "$(readlink -f "$target")" = "$(readlink -f "$source")" ]; then
     return 0
   fi
@@ -91,6 +96,9 @@ link_one() {   # $1 = target relative to $HOME, $2 = source relative to $DOTFILE
   echo "    linked $1 -> $2"
 }
 
+# Table parsing uses default IFS word-splitting: paths must not contain
+# whitespace. .links files are curated by us, not user input, so this is a
+# safe assumption -- just don't introduce a space in one.
 apply_links() {
   local table="$DOTFILES_DIR/profiles/$PROFILE.links" target source
   [ -f "$table" ] || { echo "install.sh: no link table at $table" >&2; exit 1; }
@@ -106,6 +114,7 @@ apply_links
 # --- setup steps ---------------------------------------------------------
 
 if [ "$PROFILE" = headless ]; then
+  echo "==> setup"
   # shellcheck source=headless/setup/lib.sh
   source "$DOTFILES_DIR/headless/setup/lib.sh"
   for step in "$DOTFILES_DIR/headless/setup/"[0-9]*.sh; do
