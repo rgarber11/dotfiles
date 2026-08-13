@@ -1319,8 +1319,6 @@ git commit -m "feat: herdr install step and catppuccin workspace config"
 	autoSetupRemote = true
 [rerere]
 	enabled = true
-[diff]
-	external = difft
 [alias]
 	pushf = push --force-with-lease
 	append-commit = commit --amend --date=now --no-edit
@@ -1328,8 +1326,21 @@ git commit -m "feat: herdr install step and catppuccin workspace config"
 	staash = stash --include-untracked
 	lg = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(auto)%d%C(reset)' --all
 	lgb = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(auto)%d%C(reset)%n          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'
-	force-rebase = !f() { git rebase --onto "$1" 'HEAD^'; }; f
+	force-rebase = "!f() { git rebase --onto \"$1\" 'HEAD^'; }; f"
 ```
+
+The `force-rebase` quoting is load-bearing. Git's config parser treats an
+unquoted `;` as starting a comment even mid-value, so without the outer double
+quotes everything from `; }; f` is silently dropped and the alias is left with
+an unclosed brace. This is the literal form in the user's live `~/.gitconfig`;
+the plan originally transcribed `git config --list` output, which shows the
+already-parsed value rather than the file syntax.
+
+`diff.external` is deliberately **not** here. It has no graceful degradation —
+a missing `difft` makes git fail every `git diff` with "external diff died"
+rather than falling back — so the workspace sets it conditionally in
+`45-gitconfig.sh` once the binary exists, and the desktop sets it statically in
+`arch/gitconfig`, where difft is pacman-managed.
 
 - [ ] **Step 2: Write the headless overrides**
 
@@ -1391,6 +1402,18 @@ EOF
     info "added git identity block to $(basename "$rc")"
   fi
 done
+
+# diff.external has no graceful degradation: if difft is missing, git does not
+# fall back, it fails every `git diff` outright with "external diff died". Since
+# the difftastic step can legitimately fail on a network blip, only enable it
+# once the binary is actually there -- and clear it if it ever goes missing, so
+# a workspace never ends up unable to diff. 35-difftastic.sh runs before this.
+if command -v difft >/dev/null 2>&1; then
+  git config --global diff.external difft
+else
+  git config --global --unset-all diff.external 2>/dev/null || true
+  warn "difft not installed; leaving diff.external unset so git diff keeps working"
+fi
 ```
 
 `backup_path` comes from `install.sh`, which sources this file, so it is in scope.
@@ -1429,19 +1452,30 @@ git commit -m "feat: shared git config and generated ~/.gitconfig step"
 ```bash
 # /etc/passwd comes from the image, not the PVC, so the shell change does not
 # survive a restart and has to be re-applied on every start.
+# id -un rather than $USER: install.sh runs from Coder's startup script with no
+# login shell, so $USER is simply unset -- and under `set -u` the reference on
+# the chsh line aborts the entire install at its last step, after everything
+# else has already succeeded. id -un also cannot be stale or inherited wrong.
+USER_NAME="$(id -un)"
 ZSH_PATH="$(command -v zsh || true)"
-if [ -n "$ZSH_PATH" ] && [ "$(getent passwd "$USER" | cut -d: -f7)" != "$ZSH_PATH" ]; then
+if [ -n "$ZSH_PATH" ] && [ "$(getent passwd "$USER_NAME" | cut -d: -f7)" != "$ZSH_PATH" ]; then
   info "setting login shell to $ZSH_PATH"
-  sudo chsh -s "$ZSH_PATH" "$USER" || warn "chsh failed"
+  sudo chsh -s "$ZSH_PATH" "$USER_NAME" || warn "chsh failed"
 fi
 
 # `herdr --remote` reaches the server over a non-interactive ssh channel that
 # never sources .zshrc, so a ~/.local/bin-only install would leave
 # `herdr --remote <ws>.coder` failing with "command not found".
+#
+# An explicit if rather than `cmd && info ... || warn ...`: in that form a
+# non-zero return from `info` would fire `warn` as well. info is a bare echo
+# today, but the trap wakes up the moment it gains any fallible logic.
 if [ -x "$HOME/.local/bin/herdr" ] && [ ! -e /usr/local/bin/herdr ]; then
-  sudo ln -sfn "$HOME/.local/bin/herdr" /usr/local/bin/herdr \
-    && info "linked herdr into /usr/local/bin" \
-    || warn "could not link herdr into /usr/local/bin"
+  if sudo ln -sfn "$HOME/.local/bin/herdr" /usr/local/bin/herdr; then
+    info "linked herdr into /usr/local/bin"
+  else
+    warn "could not link herdr into /usr/local/bin"
+  fi
 fi
 ```
 
