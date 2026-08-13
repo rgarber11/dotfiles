@@ -1,0 +1,20 @@
+# Shared by every profile. Signing lives in arch/gitconfig only.
+[user]
+	name = Richard Garber
+	email = 9834847+rgarber11@users.noreply.github.com
+[core]
+	autocrlf = input
+[push]
+	autoSetupRemote = true
+[rerere]
+	enabled = true
+[diff]
+	external = difft
+[alias]
+	pushf = push --force-with-lease
+	append-commit = commit --amend --date=now --no-edit
+	force-pull = pull --rebase --autostash
+	staash = stash --include-untracked
+	lg = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(auto)%d%C(reset)' --all
+	lgb = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(auto)%d%C(reset)%n          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'
+	force-rebase = !f() { git rebase --onto "$1" 'HEAD^'; }; f

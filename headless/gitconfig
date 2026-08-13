@@ -1,0 +1,4 @@
+# Coder workspace only. No commit signing: the workspace has no signing key,
+# and the requirement is explicitly unsigned commits here.
+[credential]
+	helper = store
