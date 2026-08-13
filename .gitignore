@@ -40,3 +40,16 @@ luac.out
 *.hex
 
 ./hypr/hyprland/dpms_state
+
+# herdr runtime state
+*.log
+*.sock
+session.json
+.plugins.lock
+
+# machine-local shell overrides
+.zshrc.local
+
+# installer backups
+*.pre-dotfiles
+*.pre-dotfiles.*
