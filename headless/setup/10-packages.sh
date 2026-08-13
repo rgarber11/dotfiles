@@ -20,8 +20,17 @@ done
 if [ ${#missing[@]} -gt 0 ]; then
   info "apt: installing ${missing[*]}"
   # The image clears /var/lib/apt/lists, so an update is mandatory here.
-  sudo apt-get update -qq
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${missing[@]}"
+  #
+  # Both apt calls are guarded: this file is sourced into install.sh under
+  # `set -euo pipefail`, so an unguarded failure would abort the entire install
+  # rather than just this step -- leaving the workspace with no nvim, no zsh
+  # plugins, no herdr and bash as the login shell, over a transient mirror blip.
+  if sudo apt-get update -qq; then
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${missing[@]}" \
+      || warn "apt: some packages failed to install (${missing[*]}); continuing"
+  else
+    warn "apt: update failed; skipping package install this start"
+  fi
 else
   info "apt: all packages present"
 fi
