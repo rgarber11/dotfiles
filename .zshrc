@@ -6,6 +6,7 @@ if (( RANDOM % 10 < 3 )); then fortune ru | cowsay; else fortune -a | cowsay; fi
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
+ZSH_THEME="powerlevel10k/powerlevel10k"
 
 # Would you like to use another custom folder than $ZSH/custom?
 # ZSH_CUSTOM=/path/to/new-custom-folder
@@ -56,13 +57,6 @@ add-zsh-hook -Uz precmd rehash_precmd
 
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
-
-# Preferred editor for local and remote sessions
-# if [[ -n $SSH_CONNECTION ]]; then
-#   export EDITOR='vim'
-# else
-#   export EDITOR='nvim'
-# fi
 
 ZSH_COLORIZE_STYLE="colorful"
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=23'
