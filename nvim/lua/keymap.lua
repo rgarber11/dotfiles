@@ -373,22 +373,26 @@ vim.keymap.set('n', '<leader>b;', function()
 end, { desc = 'Open Harpoon File [4]' })
 
 -- Textobjects Keymaps
-vim.keymap.set({ 'x', 'o' }, 'af', function()
+-- NOTE: mini.ai owns bare `a`/`i` in operator/visual mode (brackets, quotes, tags,
+-- function-CALL `f`, argument `a`, etc.). To avoid shadowing mini.ai and the
+-- `a`/`i` `timeoutlen` stall, treesitter SELECT objects live under the `<leader>v`
+-- group. Mnemonic: `a`/`i` = around/inside, `f`/`c`/`p` = function/class/parameter.
+vim.keymap.set({ 'x', 'o' }, '<leader>vaf', function()
   require('nvim-treesitter-textobjects.select').select_textobject('@function.outer', 'textobjects')
 end, { desc = 'Select around function' })
-vim.keymap.set({ 'x', 'o' }, 'if', function()
+vim.keymap.set({ 'x', 'o' }, '<leader>vif', function()
   require('nvim-treesitter-textobjects.select').select_textobject('@function.inner', 'textobjects')
 end, { desc = 'Select inside function' })
-vim.keymap.set({ 'x', 'o' }, 'ac', function()
+vim.keymap.set({ 'x', 'o' }, '<leader>vac', function()
   require('nvim-treesitter-textobjects.select').select_textobject('@class.outer', 'textobjects')
 end, { desc = 'Select around class' })
-vim.keymap.set({ 'x', 'o' }, 'ic', function()
+vim.keymap.set({ 'x', 'o' }, '<leader>vic', function()
   require('nvim-treesitter-textobjects.select').select_textobject('@class.inner', 'textobjects')
 end, { desc = 'Select inside class' })
-vim.keymap.set({ 'x', 'o' }, 'aa', function()
+vim.keymap.set({ 'x', 'o' }, '<leader>vap', function()
   require('nvim-treesitter-textobjects.select').select_textobject('@parameter.outer', 'textobjects')
 end, { desc = 'Select around parameter' })
-vim.keymap.set({ 'x', 'o' }, 'ia', function()
+vim.keymap.set({ 'x', 'o' }, '<leader>vip', function()
   require('nvim-treesitter-textobjects.select').select_textobject('@parameter.inner', 'textobjects')
 end, { desc = 'Select inside parameter' })
 vim.keymap.set('n', '<leader>pn', function()

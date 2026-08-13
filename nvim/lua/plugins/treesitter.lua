@@ -82,6 +82,11 @@ return {
   {
     'folke/flash.nvim',
     event = 'VeryLazy',
+    -- Flash jump/treesitter/remote maps live in `lua/keymap.lua` (jump=<C-s>, S=treesitter,
+    -- r=remote, R=treesitter_search, <c-space>=incremental). `s` is intentionally left to
+    -- mini.surround. Flash's only auto-bindings are the enhanced f/F/t/T/;/, char-motions,
+    -- which are conflict-free and kept on; set `modes = { char = { enabled = false } }` to
+    -- restore vanilla f/t behavior.
     ---@type Flash.Config
     opts = {},
   },

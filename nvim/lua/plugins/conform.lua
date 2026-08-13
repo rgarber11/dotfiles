@@ -5,21 +5,26 @@ return {
     local conform = require 'conform'
 
     conform.setup {
-      clang_format = {
-        prepend_args = { '--fallback-style=Google' },
+      formatters = {
+        clang_format = {
+          prepend_args = { '--fallback-style=Google' },
+        },
+        ktfmt = {
+          prepend_args = { '--kotlinlang-style' },
+        },
       },
       formatters_by_ft = {
-        javascript = { 'prettier' },
-        typescript = { 'prettier' },
-        javascriptreact = { 'prettier' },
-        typescriptreact = { 'prettier' },
-        svelte = { 'prettier' },
-        css = { 'prettier' },
-        html = { 'prettier' },
-        json = { 'prettier' },
-        yaml = { 'prettier' },
-        markdown = { 'prettier' },
-        graphql = { 'prettier' },
+        javascript = { 'oxfmt' },
+        typescript = { 'oxfmt' },
+        javascriptreact = { 'oxfmt' },
+        typescriptreact = { 'oxfmt' },
+        svelte = { 'oxfmt' },
+        css = { 'oxfmt' },
+        html = { 'oxfmt' },
+        json = { 'oxfmt' },
+        yaml = { 'oxfmt' },
+        markdown = { 'oxfmt' },
+        graphql = { 'oxfmt' },
         lua = { 'stylua' },
         python = { 'isort', 'ruff' },
         cpp = { 'clang_format' },
