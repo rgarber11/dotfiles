@@ -1,0 +1,7 @@
+# target                       source
+.zshrc                         headless/zshrc
+.zshenv                        headless/zshenv
+.p10k.zsh                      shared/zsh/p10k.zsh
+.config/nvim                   shared/nvim
+.config/herdr/config.toml      headless/herdr.toml
+.clang-format                  editors/cpp/.clang-format

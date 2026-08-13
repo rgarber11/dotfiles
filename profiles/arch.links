@@ -1,0 +1,15 @@
+# target                       source
+.zshrc                         arch/zshrc
+.gitconfig                     arch/gitconfig
+.p10k.zsh                      shared/zsh/p10k.zsh
+.config/nvim                   shared/nvim
+.config/herdr/config.toml      arch/herdr.toml
+.config/hypr                   arch/hypr
+.config/kitty                  arch/kitty
+.config/alacritty              arch/alacritty
+.config/anyrun                 arch/anyrun
+.config/swaync                 arch/swaync
+.config/quickshell             arch/quickshell
+.config/vicinae                arch/vicinae
+.config/fontconfig             arch/fontconfig
+.clang-format                  editors/cpp/.clang-format
