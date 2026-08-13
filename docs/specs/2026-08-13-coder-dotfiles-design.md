@@ -173,6 +173,24 @@ Requirement: behave identically to the Arch machine.
   isort, shfmt and clang-format itself; none of them need cargo or a JDK.
 - **Clipboard**: the workspace has no X or Wayland display. Neovim 0.12's
   built-in OSC-52 provider carries yanks back to the local terminal.
+- **Theme is the one deliberate divergence** (added 2026-08-13 after workspace
+  testing): the workspace uses catppuccin mocha, the desktop keeps
+  solarized-osaka. `init.lua` detects the workspace via `/mnt/dsp-seed` — a
+  hostPath mount that exists only there, and so more reliable than
+  `$CODER_AGENT_URL`, which depends on whatever launched nvim having inherited
+  the agent's environment — with the env var as fallback.
+
+  Both colorschemes are installed on **both** machines, gated with
+  `lazy = headless` and `lazy = not headless` so only one loads. That is
+  deliberate: `enabled = headless` would stop the desktop installing
+  catppuccin, so the workspace would add its entry to `lazy-lock.json` at
+  runtime and `30-neovim.sh` would revert it as an unwanted modification,
+  losing the pin on every restart. Installing both keeps one lockfile valid for
+  both profiles.
+- **First-launch cost**: `Lazy! restore` clones and checks out plugins but does
+  not build treesitter parsers (`:TSUpdate` is a no-op on an empty parser dir)
+  or complete image.nvim's hererocks step. Both happen on the first real `nvim`
+  launch, which is therefore slow.
 - `keymap.lua:119` calls `hyprland-keymap-picker` inside a `pcall`, so it is
   already inert off Hyprland. No change needed.
 
@@ -206,8 +224,11 @@ p10k instant prompt
 
 Arrow-key bindings for history-substring-search are set after it loads.
 
-**Kept** in `headless/zshrc`: `EDITOR=nvim`; `PATH` containing `~/.local/bin`
-and `~/bin`; `NODE_OPTIONS`; `setopt autocd extendedglob`;
+**Kept** in `headless/zshrc`: `EDITOR=nvim`; `PATH` containing `~/.local/bin`,
+`~/bin` and `/usr/games` (appended — Debian/Ubuntu put `fortune` and `cowsay`
+there and it is not on the default PATH, so without it `give_fortune` silently
+no-ops; appended rather than prepended so nothing in `/usr/games` shadows a
+real tool); `NODE_OPTIONS`; `setopt autocd extendedglob`;
 `unsetopt beep nomatch notify`; `bindkey -e` plus the Alt-arrow word-motion
 bindings; `ENABLE_CORRECTION` / `setopt correct` / `CORRECT_IGNORE` /
 `CORRECT_IGNORE_FILE`; `ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE`; and
