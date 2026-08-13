@@ -215,7 +215,7 @@ echo "$SECOND" | tail -20
 echo
 echo "=== assertions after restart ==="
 assert_not_contains "neovim not re-downloaded"    "downloading nvim"      "$SECOND"
-assert_not_contains "difftastic not re-downloaded" "downloading difftastic" "$SECOND"
+assert_not_contains "difftastic not re-downloaded" "downloading difft"     "$SECOND"
 assert_not_contains "fastfetch not re-downloaded" "downloading fastfetch" "$SECOND"
 assert_not_contains "herdr not reinstalled"       "installing herdr"      "$SECOND"
 
