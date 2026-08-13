@@ -13,3 +13,4 @@
 .config/vicinae                arch/vicinae
 .config/fontconfig             arch/fontconfig
 .clang-format                  editors/cpp/.clang-format
+.local/bin/fasterfetch          bin/fasterfetch

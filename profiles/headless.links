@@ -5,3 +5,4 @@
 .config/nvim                   shared/nvim
 .config/herdr/config.toml      headless/herdr.toml
 .clang-format                  editors/cpp/.clang-format
+.local/bin/fasterfetch          bin/fasterfetch
