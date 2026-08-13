@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# System libraries that must live in /usr. These are wiped with the container
+# filesystem on every workspace restart, so this reinstalls each start -- that
+# cost is unavoidable and is exactly why user-facing tools go to ~/.local.
+
+APT_PACKAGES=(
+  cmake fd-find fzf
+  lua5.1 liblua5.1-0-dev luarocks
+  imagemagick libmagickwand-dev
+  python3-pip
+  fortune-mod fortunes cowsay
+  qrencode chafa
+)
+
+missing=()
+for pkg in "${APT_PACKAGES[@]}"; do
+  dpkg -s "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+done
+
+if [ ${#missing[@]} -gt 0 ]; then
+  info "apt: installing ${missing[*]}"
+  # The image clears /var/lib/apt/lists, so an update is mandatory here.
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${missing[@]}"
+else
+  info "apt: all packages present"
+fi
+
+# Ubuntu ships fd as fdfind to avoid a name clash.
+if command -v fdfind >/dev/null 2>&1 && [ ! -e "$HOME/.local/bin/fd" ]; then
+  ln -sfn "$(command -v fdfind)" "$HOME/.local/bin/fd"
+  info "linked fd -> fdfind"
+fi
+
+# noble's tree-sitter-cli is 0.20.8; nvim-treesitter's main branch needs current.
+if needs_install tree-sitter; then
+  info "npm: installing tree-sitter-cli"
+  npm install -g tree-sitter-cli >/dev/null 2>&1 || warn "tree-sitter-cli install failed"
+fi
