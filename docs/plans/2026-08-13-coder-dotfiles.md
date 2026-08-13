@@ -868,6 +868,11 @@ needs_install() {   # $1 = command name
 }
 
 # Newest release tag for a GitHub repo, e.g. latest_release_tag neovim/neovim
+# Echoes the tag, or nothing. Deliberately always returns 0: install.sh runs
+# under `set -euo pipefail`, where a bare TAG="$(latest_release_tag ...)"
+# assignment inherits this pipeline's status, so a rate-limit or network blip
+# would abort the whole install and stop the workspace booting. Callers test
+# for an empty string instead.
 latest_release_tag() {   # $1 = owner/repo
   local auth=()
   [ -n "${GH_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GH_TOKEN")
@@ -875,6 +880,7 @@ latest_release_tag() {   # $1 = owner/repo
       "https://api.github.com/repos/$1/releases/latest" 2>/dev/null \
     | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
     | head -1
+  return 0
 }
 
 # Download a .tar.gz into ~/.local/opt/<name>-<tag> and link one binary.
@@ -900,15 +906,33 @@ install_tarball() {   # $1 name  $2 tag  $3 url  $4 binary-path-in-archive  $5 s
   fi
   mkdir -p "$HOME/.local/opt" "$HOME/.local/bin"
   rm -rf "$dest"
-  mv "$tmp" "$dest"
+  # mv across filesystems is copy-then-unlink, so an interrupted move can leave
+  # $dest partly populated. If $binpath happened to land, the idempotence check
+  # above would report "already installed" over a broken tree forever -- so tear
+  # down a failed move rather than leaving it to be found later.
+  if ! mv "$tmp" "$dest"; then
+    warn "failed to install $name (move failed)"
+    rm -rf "$dest" "$tmp"
+    return 1
+  fi
   ln -sfn "$dest/$binpath" "$HOME/.local/bin/$name"
   info "installed $name $tag"
 }
+
+# Every tool this repo installs lands in ~/.local/bin, but install.sh runs from
+# Coder's startup script with no login shell, so that directory is not on PATH.
+# Without this, needs_install reports every tool missing on every start --
+# re-resolving GitHub releases and re-running installers that already succeeded.
+export PATH="$HOME/.local/bin:$PATH"
 
 mkdir -p "$HOME/.local/bin" "$HOME/.local/opt" "$HOME/.local/state/dotfiles"
 ```
 
 The `downloading <name>` string is what `tests/run.sh` asserts is *absent* on the second run.
+
+**Every numbered setup step starts with `#!/usr/bin/env bash`.** They are sourced
+rather than executed, so it changes no behavior — but without it `shellcheck`
+fails `SC2148` and cannot infer the dialect.
 
 - [ ] **Step 2: Lint**
 
@@ -975,9 +999,14 @@ if command -v fdfind >/dev/null 2>&1 && [ ! -e "$HOME/.local/bin/fd" ]; then
 fi
 
 # noble's tree-sitter-cli is 0.20.8; nvim-treesitter's main branch needs current.
+# --prefix ~/.local rather than a global install: npm's default prefix is the
+# root-owned /usr/local (EACCES as the coder user), and /usr is rebuilt from the
+# image on every restart, so a global install would silently reinstall forever.
+# ~/.local is the PVC, so this happens once.
 if needs_install tree-sitter; then
-  info "npm: installing tree-sitter-cli"
-  npm install -g tree-sitter-cli >/dev/null 2>&1 || warn "tree-sitter-cli install failed"
+  info "npm: installing tree-sitter-cli into ~/.local"
+  npm install -g --prefix "$HOME/.local" tree-sitter-cli >/dev/null 2>&1 \
+    || warn "tree-sitter-cli install failed"
 fi
 ```
 
@@ -1028,6 +1057,13 @@ for url in "${ZSH_PLUGINS[@]}"; do
       git -C "$dir" pull --quiet --ff-only || warn "could not update $name"
     fi
   else
+    # An interrupted clone leaves a directory with no .git, and git refuses to
+    # clone into a non-empty directory -- which would fail identically on every
+    # subsequent workspace start. Nothing in there is worth keeping, so clear it.
+    if [ -d "$dir" ]; then
+      warn "removing incomplete $name checkout"
+      rm -rf "$dir"
+    fi
     info "cloning $name"
     git clone --depth=1 --quiet "$url" "$dir" || warn "could not clone $name"
   fi
