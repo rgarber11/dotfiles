@@ -9,7 +9,7 @@ APT_PACKAGES=(
   imagemagick libmagickwand-dev
   python3-pip
   fortune-mod fortunes cowsay
-  qrencode chafa
+  qrencode chafa btop
 )
 
 missing=()
@@ -26,8 +26,8 @@ if [ ${#missing[@]} -gt 0 ]; then
   # rather than just this step -- leaving the workspace with no nvim, no zsh
   # plugins, no herdr and bash as the login shell, over a transient mirror blip.
   if sudo apt-get update -qq; then
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${missing[@]}" \
-      || warn "apt: some packages failed to install (${missing[*]}); continuing"
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${missing[@]}" ||
+      warn "apt: some packages failed to install (${missing[*]}); continuing"
   else
     warn "apt: update failed; skipping package install this start"
   fi
@@ -48,6 +48,6 @@ fi
 # ~/.local is the PVC, so this happens once.
 if needs_install tree-sitter; then
   info "npm: installing tree-sitter-cli into ~/.local"
-  npm install -g --prefix "$HOME/.local" tree-sitter-cli >/dev/null 2>&1 \
-    || warn "tree-sitter-cli install failed"
+  npm install -g --prefix "$HOME/.local" tree-sitter-cli >/dev/null 2>&1 ||
+    warn "tree-sitter-cli install failed"
 fi

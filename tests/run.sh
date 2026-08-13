@@ -99,10 +99,18 @@ echo "zsh_ident=$(zsh -ic 'git var GIT_AUTHOR_IDENT' 2>/dev/null | tail -1)"
 echo "bash_ident=$(bash -lc 'git var GIT_AUTHOR_IDENT' 2>/dev/null | tail -1)"
 echo "backups=$(find ~ -maxdepth 1 -name '*.pre-dotfiles*' | wc -l)"
 # The greeting assertion elsewhere calls give_fortune directly, which proves
-# fortune/cowsay resolve on PATH but never exercises the deferral wiring. This
-# catches the likely regression -- someone dropping the call from .zshrc --
-# without needing a pty to drive a real precmd cycle.
-echo "greet_wired=$(grep -c '^greet_on_first_prompt$' ~/.zshrc)"
+# fortune/cowsay resolve on PATH but never exercises how .zshrc actually
+# wires it up. This catches the likely regressions -- someone dropping the
+# call from .zshrc, or someone moving it back below the instant-prompt
+# block -- without needing a pty to drive a real prompt cycle. Ordering is
+# the whole fix here: p10k's instant prompt treats any console output
+# produced from its sourcing point onward as suspect, so give_fortune has to
+# run strictly before it, not merely somewhere in the file.
+echo "greet_before_instant=$(awk '
+  /p10k-instant-prompt/ && !p10k_line { p10k_line = NR }
+  /^give_fortune$/ && !fortune_line { fortune_line = NR }
+  END { print (fortune_line && p10k_line && fortune_line < p10k_line) ? "yes" : "no" }
+' ~/.zshrc)"
 # nvim's binary and config symlink both persist under ~/.local and the repo
 # clone, so (unlike fortune/cowsay above) this is fine to check from a fresh
 # container.
@@ -138,7 +146,8 @@ assert_contains "login shell is zsh"      "shell=/usr/bin/zsh" "$FIRST"
 # produces: that sequence only occurs when the value is empty. (greeting=
 # is asserted against $FIRST, not $CHECKS -- see the comment in install_run.)
 assert_not_contains "fortune greeting produces output" $'greeting=\n' "$FIRST"
-assert_contains "greeting is wired through the precmd deferral" "greet_wired=1" "$CHECKS"
+assert_contains "greeting runs before p10k instant prompt starts monitoring" \
+  "greet_before_instant=yes" "$CHECKS"
 assert_contains "zshrc symlinks into the repo" \
   "zshrc=/home/coder/.config/coderv2/dotfiles/headless/zshrc" "$CHECKS"
 assert_contains "nvim config symlinks into the repo" \

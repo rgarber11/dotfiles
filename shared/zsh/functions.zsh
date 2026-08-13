@@ -93,19 +93,3 @@ give_fortune() {
   [[ -n "$text" ]] && print -r -- "$text" | cowsay
   return 0
 }
-
-# Print the greeting after the first prompt is drawn, not during .zshrc.
-#
-# p10k's instant prompt treats any console output produced while .zshrc is still
-# being sourced as suspect -- even output on the very last line, since the
-# boundary it cares about is "the real first prompt has been drawn", not "end of
-# file". A one-shot precmd hook that removes itself lands the greeting just past
-# that boundary. Same pattern p10k uses internally for _p9k_precmd_first.
-greet_on_first_prompt() {
-  autoload -Uz add-zsh-hook
-  _dotfiles_greeting() {
-    add-zsh-hook -d precmd _dotfiles_greeting
-    give_fortune
-  }
-  add-zsh-hook precmd _dotfiles_greeting
-}

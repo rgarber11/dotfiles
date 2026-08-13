@@ -1,19 +1,23 @@
 # ~/.zshrc -- Coder workspace (headless profile). Managed by ~/dotfiles.
 # Machine-local overrides belong in ~/.zshrc.local, which is gitignored.
 
-# Powerlevel10k instant prompt. Must stay near the top. Console output later
-# in this file (the greeting, notably) still counts as "during init" from
-# p10k's perspective regardless of where it sits in this file -- see
-# greet_on_first_prompt (shared/zsh/functions.zsh), called near the bottom,
-# for how that's actually handled.
+# /usr/games is where Debian/Ubuntu put fortune and cowsay, and it is not on
+# the default PATH -- without it give_fortune silently no-ops. This PATH
+# export and the greeting below have to come before the instant-prompt block:
+# p10k's instant prompt treats any console output produced from here on as
+# suspect, right up until the real first prompt is drawn, so printing before
+# it starts monitoring avoids the warning entirely.
+export PATH="$HOME/.local/bin:$HOME/bin:$PATH:/usr/games"
+source "$HOME/dotfiles/shared/zsh/functions.zsh"
+give_fortune
+
+# Powerlevel10k instant prompt. Must stay near the top, and after the
+# greeting above -- see the comment there.
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
 export EDITOR=nvim
-# /usr/games is where Debian/Ubuntu put fortune and cowsay, and it is not on
-# the default PATH -- without it give_fortune silently no-ops.
-export PATH="$HOME/.local/bin:$HOME/bin:$PATH:/usr/games"
 export NODE_OPTIONS="--max_old_space_size=8196 --stack-trace-limit=1000"
 
 ZSH_PLUGIN_DIR="$HOME/.local/share/zsh/plugins"
@@ -24,7 +28,6 @@ autoload -Uz compinit && compinit
 zstyle :compinstall filename "$HOME/.zshrc"
 
 source "$HOME/dotfiles/shared/zsh/options.zsh"
-source "$HOME/dotfiles/shared/zsh/functions.zsh"
 
 # Prompt.
 source "$ZSH_PLUGIN_DIR/powerlevel10k/powerlevel10k.zsh-theme"
@@ -45,5 +48,3 @@ bindkey -M emacs '^N' history-substring-search-down
 alias dotup="$HOME/dotfiles/install.sh --upgrade"
 
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
-
-greet_on_first_prompt

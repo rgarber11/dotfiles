@@ -1,9 +1,15 @@
 #!/bin/zsh
-# Powerlevel10k instant prompt. Keep near the top. Console output later in
-# this file (the greeting, notably) still counts as "during init" from p10k's
-# perspective regardless of where it sits in this file -- see
-# greet_on_first_prompt (shared/zsh/functions.zsh), called at the bottom, for
-# how that's actually handled.
+# Unlike the headless profile, no PATH change is needed here: fortune and
+# cowsay live in /usr/bin on Arch, already on the inherited PATH before this
+# file runs. The greeting still has to run before the instant-prompt block
+# below: p10k's instant prompt treats any console output produced from here
+# on as suspect, right up until the real first prompt is drawn, so printing
+# before it starts monitoring avoids the warning entirely.
+source "$HOME/dotfiles/shared/zsh/functions.zsh"
+give_fortune
+
+# Powerlevel10k instant prompt. Keep near the top, and after the greeting
+# above -- see the comment there.
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
@@ -24,7 +30,6 @@ compinit
 autoload -Uz add-zsh-hook
 
 source "$HOME/dotfiles/shared/zsh/options.zsh"
-source "$HOME/dotfiles/shared/zsh/functions.zsh"
 
 # Pick up newly installed pacman binaries without a manual rehash.
 rehash_precmd() {
@@ -91,5 +96,3 @@ herdr_remote() {
 . /usr/share/nvm/init-nvm.sh
 
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
-
-greet_on_first_prompt
