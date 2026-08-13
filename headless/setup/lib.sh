@@ -11,6 +11,11 @@ needs_install() {   # $1 = command name
 }
 
 # Newest release tag for a GitHub repo, e.g. latest_release_tag neovim/neovim
+# Echoes the tag, or nothing. Deliberately always returns 0: install.sh runs
+# under `set -euo pipefail`, where a bare TAG="$(latest_release_tag ...)"
+# assignment inherits this pipeline's status, so a rate-limit or network blip
+# would abort the whole install and stop the workspace booting. Callers test
+# for an empty string instead.
 latest_release_tag() {   # $1 = owner/repo
   local auth=()
   [ -n "${GH_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GH_TOKEN")
@@ -18,6 +23,7 @@ latest_release_tag() {   # $1 = owner/repo
       "https://api.github.com/repos/$1/releases/latest" 2>/dev/null \
     | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
     | head -1
+  return 0
 }
 
 # Download a .tar.gz into ~/.local/opt/<name>-<tag> and link one binary.
@@ -43,9 +49,23 @@ install_tarball() {   # $1 name  $2 tag  $3 url  $4 binary-path-in-archive  $5 s
   fi
   mkdir -p "$HOME/.local/opt" "$HOME/.local/bin"
   rm -rf "$dest"
-  mv "$tmp" "$dest"
+  # mv across filesystems is copy-then-unlink, so an interrupted move can leave
+  # $dest partly populated. If $binpath happened to land, the idempotence check
+  # above would report "already installed" over a broken tree forever -- so tear
+  # down a failed move rather than leaving it to be found later.
+  if ! mv "$tmp" "$dest"; then
+    warn "failed to install $name (move failed)"
+    rm -rf "$dest" "$tmp"
+    return 1
+  fi
   ln -sfn "$dest/$binpath" "$HOME/.local/bin/$name"
   info "installed $name $tag"
 }
+
+# Every tool this repo installs lands in ~/.local/bin, but install.sh runs from
+# Coder's startup script with no login shell, so that directory is not on PATH.
+# Without this, needs_install reports every tool missing on every start --
+# re-resolving GitHub releases and re-running installers that already succeeded.
+export PATH="$HOME/.local/bin:$PATH"
 
 mkdir -p "$HOME/.local/bin" "$HOME/.local/opt" "$HOME/.local/state/dotfiles"
