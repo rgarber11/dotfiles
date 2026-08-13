@@ -27,13 +27,25 @@ fi
 
 # Install the exact plugin revisions from lazy-lock.json. `restore`, not `sync`
 # -- that is what makes parity with the desktop literal rather than approximate.
+#
+# The marker is written only after verifying the result, because `Lazy! restore`
+# exits 0 even when individual plugins fail to check out. Trusting its exit
+# status would write the marker over a half-installed state and never retry.
+#
+# `want` is captured from lazy-lock.json BEFORE running restore, not after:
+# when a plugin's clone fails, lazy.nvim prunes that plugin's own entry back
+# out of lazy-lock.json as part of the same restore run. Reading the count
+# afterward would shrink `want` to match the failure, hiding it.
 BOOTSTRAP_MARKER="$HOME/.local/state/dotfiles/nvim-bootstrapped"
 if command -v nvim >/dev/null 2>&1 && [ ! -f "$BOOTSTRAP_MARKER" ]; then
   info "bootstrapping neovim plugins (Lazy! restore)"
-  if nvim --headless "+Lazy! restore" +qa >/dev/null 2>&1; then
+  want="$(grep -c '": {' "$HOME/.config/nvim/lazy-lock.json" 2>/dev/null || echo 0)"
+  nvim --headless "+Lazy! restore" +qa >/dev/null 2>&1 || true
+  got="$(find "$HOME/.local/share/nvim/lazy" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
+  if [ "$want" -gt 0 ] && [ "$got" -ge "$want" ]; then
     touch "$BOOTSTRAP_MARKER"
-    info "neovim plugins installed"
+    info "neovim plugins installed ($got/$want)"
   else
-    warn "Lazy! restore failed; run it by hand and check :Lazy"
+    warn "neovim bootstrap incomplete ($got/$want plugins); will retry next start"
   fi
 fi
