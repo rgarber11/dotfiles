@@ -52,6 +52,13 @@ if not vim.uv.fs_stat(lazypath) then
   }
 end
 vim.opt.rtp:prepend(lazypath)
+
+-- The Coder workspace gets catppuccin mocha; the desktop keeps solarized-osaka.
+-- /mnt/dsp-seed is a read-only hostPath mount that exists only in the workspace,
+-- so it is a more reliable signal than $CODER_AGENT_URL, which depends on the
+-- agent's environment being inherited by whatever launched nvim.
+local headless = vim.uv.fs_stat('/mnt/dsp-seed') ~= nil or vim.env.CODER_AGENT_URL ~= nil
+
 require('lazy').setup({
   -- Git Helper
   'tpope/vim-fugitive',
@@ -92,7 +99,7 @@ require('lazy').setup({
   'lewis6991/gitsigns.nvim',
   {
     'craftzdog/solarized-osaka.nvim',
-    lazy = false,
+    lazy = headless,
     priority = 1000,
     config = function()
       require('solarized-osaka').setup {
@@ -105,6 +112,16 @@ require('lazy').setup({
         },
       }
       vim.cmd.colorscheme 'solarized-osaka'
+    end,
+  },
+  {
+    'catppuccin/nvim',
+    name = 'catppuccin',
+    lazy = not headless,
+    priority = 1000,
+    config = function()
+      require('catppuccin').setup { flavour = 'mocha' }
+      vim.cmd.colorscheme 'catppuccin-mocha'
     end,
   },
 
