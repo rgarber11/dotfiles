@@ -100,7 +100,10 @@ Flow:
    mode cannot work; but a file that already exists was written by hand, so it is
    left alone — and a `warn` if it says `local`, because that configuration
    cannot work here, or if it is not readable JSON, which would otherwise fail
-   silently here and then break the launcher later. Both warnings name the remedy.
+   silently here and then degrade the pin — the launcher's `readJsonFile` swallows
+   the parse error and `resolveHub` falls back to its `local` default, which cannot
+   work in a pod, so it fails quietly rather than loudly. Both warnings name the
+   remedy.
    The value is read with `node -e`, not `grep`: a substring match for `local`
    false-positives on any other value containing it. Same non-clobbering ethos as
    `backup_path` and the `no-system-rc` marker.
@@ -133,11 +136,26 @@ Flow:
    its neighbours — `nvim v0.11 already installed`, `apt: all packages present` —
    rather than three numbers the reader has to add up. A boot that changed something
    keeps the full `linked N, relinked N, already correct N`. A non-empty `conflicts`
-   array becomes a `warn` **naming the paths**, not just counting them: a conflict
-   means a real file is sitting where a symlink belongs, so the layer is partly
-   broken, and a bare count leaves the user to go find which of six links failed.
+   array becomes a `warn` **naming each path and the launcher's own reason for it**,
+   not just counting them: the layer is partly broken, a bare count leaves the user
+   to go find which of six links failed, and the two reasons `install.mjs` emits
+   want opposite fixes — `exists and is not a symlink` means move that file aside,
+   while `target missing: <path>` means the checkout is incomplete and wants a
+   reclone. Asserting one of them for both sent half the cases the wrong way.
 5. **`--upgrade` only.** `node "$spec_base_launcher" update --hosted …`,
-   which fast-forwards the fork branch, merges `origin/main`, and relinks. What
+   which fast-forwards the fork branch, merges `origin/main`, and relinks.
+
+   The step reports what that actually did, not just the link counts: `update`
+   returns `ownBranch`, `upstream` and `merge` at the top level of its report, and
+   reading only the nested `install` counts meant a `dotup` whose fetch died or
+   whose merge conflicted printed a cheerful `6 links already correct` and nothing
+   else — discarding the only signals `update` exists to produce. Each of
+   pull-failed, dirty-checkout, fetch-failed and merge-conflict now warns with the
+   path to fix it. `GIT_TERMINAL_PROMPT=0` wraps this call too, for the same reason
+   the clone sets it: the launcher shells out to git and never sets it itself.
+
+   `SPEC_BASE_BRANCH` is also checked against the checkout's actual branch here,
+   because it governs clones only — see above. What
    that merge refreshes is the **launcher, skill and commands** — not the viewer.
    Worth stating precisely, because the plan originally said "coworkers' hub and
    viewer fixes" and that is wrong for a hosted-pinned workspace: `hub.mjs` builds
