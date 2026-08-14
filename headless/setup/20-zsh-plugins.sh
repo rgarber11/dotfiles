@@ -12,24 +12,37 @@ ZSH_PLUGINS=(
   https://github.com/zsh-users/zsh-history-substring-search
 )
 
-mkdir -p "$ZSH_PLUGIN_DIR"
-for url in "${ZSH_PLUGINS[@]}"; do
-  name="$(basename "$url")"
-  dir="$ZSH_PLUGIN_DIR/$name"
-  if [ -d "$dir/.git" ]; then
-    if [ "${UPGRADE:-0}" = 1 ]; then
-      info "updating $name"
-      git -C "$dir" pull --quiet --ff-only || warn "could not update $name"
+# Every git call below is bounded and guarded, for the same reason the curl calls
+# in lib.sh carry --max-time: this file is sourced into install.sh under
+# `set -euo pipefail`, so one unguarded failure aborts the whole install and the
+# workspace comes up with no shell config at all. git has no built-in timeout, and
+# an egress that drops packets rather than resetting them makes a clone hang
+# forever rather than fail -- so `timeout` supplies the bound, and its exit 124
+# lands in the existing warn branches.
+if ! mkdir -p "$ZSH_PLUGIN_DIR"; then
+  warn "could not create $ZSH_PLUGIN_DIR; skipping the zsh plugins"
+else
+  for url in "${ZSH_PLUGINS[@]}"; do
+    name="$(basename "$url")"
+    dir="$ZSH_PLUGIN_DIR/$name"
+    if [ -d "$dir/.git" ]; then
+      if [ "${UPGRADE:-0}" = 1 ]; then
+        info "updating $name"
+        timeout 120 git -C "$dir" pull --quiet --ff-only || warn "could not update $name"
+      fi
+    else
+      # An interrupted clone leaves a directory with no .git, and git refuses to
+      # clone into a non-empty directory -- which would fail identically on every
+      # subsequent workspace start. Nothing in there is worth keeping, so clear it.
+      if [ -d "$dir" ]; then
+        warn "removing incomplete $name checkout"
+        # || true: a directory this user cannot remove (an ownership shift on the
+        # PVC) would otherwise abort the install here. The clone below then fails
+        # on the non-empty directory and warns, which is the right outcome.
+        rm -rf "$dir" || true
+      fi
+      info "cloning $name"
+      timeout 120 git clone --depth=1 --quiet "$url" "$dir" || warn "could not clone $name"
     fi
-  else
-    # An interrupted clone leaves a directory with no .git, and git refuses to
-    # clone into a non-empty directory -- which would fail identically on every
-    # subsequent workspace start. Nothing in there is worth keeping, so clear it.
-    if [ -d "$dir" ]; then
-      warn "removing incomplete $name checkout"
-      rm -rf "$dir"
-    fi
-    info "cloning $name"
-    git clone --depth=1 --quiet "$url" "$dir" || warn "could not clone $name"
-  fi
-done
+  done
+fi
