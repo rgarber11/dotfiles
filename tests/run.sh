@@ -34,6 +34,7 @@ in_workspace() {
     -e GIT_COMMITTER_NAME="Wrong Person" \
     -e GIT_COMMITTER_EMAIL=wrong@example.com \
     -e STUB_CONFLICTS="${STUB_CONFLICTS:-0}" \
+    -e SEED_HUB_MARKER="${SEED_HUB_MARKER:-0}" \
     "$IMAGE" bash -s
 }
 
@@ -123,6 +124,27 @@ chmod +x ~/.config/coderv2/dotfiles/install.sh
 # second run ~/.zshrc is already install.sh's symlink, so this leaves it
 # alone.
 [ -e ~/.zshrc ] || echo '# pre-existing user file' > ~/.zshrc
+# The stub log lives on the persisted volume, so without this a leftover log
+# from a previous run (or --keep) would inflate spec_clones' invocation count.
+# Truncating here, not deleting: this keeps the fixture's own "append" contract
+# intact and only resets what each install_run measures.
+: > ~/spec-base-stub.log
+# Gated on SEED_HUB_MARKER, not on "does config.json already exist": under
+# --keep this same install_run also runs as the FIRST call of a later
+# ./tests/run.sh invocation, when config.json already survives from the
+# previous invocation's restart -- a plain existence check would reseed it
+# there too and corrupt that run's own "hub is pinned to hosted" assertion.
+# Only the restart call passes SEED_HUB_MARKER=1.
+#
+# The point of seeding at all: overwrite config.json with a value the setup
+# step's own write path never produces, so the AFTER probe below can tell "the
+# write-if-absent guard held" apart from "the guard is gone and it rewrote
+# hosted -> hosted anyway" -- the fixture's install.sh only ever writes
+# "hosted", so asserting spec_hub=hosted after a restart alone would pass
+# either way.
+if [ "$SEED_HUB_MARKER" = 1 ] && [ -e ~/.claude/spec-base-local/config.json ]; then
+  printf '{\n  "hub": "custom-marker"\n}\n' > ~/.claude/spec-base-local/config.json
+fi
 ~/.config/coderv2/dotfiles/install.sh
 REPO_STATUS_AFTER="$(git -C ~/.config/coderv2/dotfiles status --porcelain -uno | wc -l)"
 echo "repo_status_delta=$((REPO_STATUS_AFTER - REPO_STATUS_BEFORE))"
@@ -301,7 +323,7 @@ echo "=== second install (new container, same home: simulates restart) ==="
 # this doesn't disturb them. A fourth container run just for this would cost
 # another minute-plus; nothing this run already asserts (spec_argv, the
 # invocation count, the hub) is sensitive to what the report's counts are.
-SECOND="$(STUB_CONFLICTS=1 install_run 2>&1)" || { echo "$SECOND"; echo "second install failed"; exit 1; }
+SECOND="$(STUB_CONFLICTS=1 SEED_HUB_MARKER=1 install_run 2>&1)" || { echo "$SECOND"; echo "second install failed"; exit 1; }
 echo "$SECOND" | tail -20
 
 echo
@@ -313,6 +335,7 @@ assert_not_contains "herdr not reinstalled"       "installing herdr"      "$SECO
 assert_contains "install.sh does not modify the dotfiles clone (restart)" "repo_status_delta=0" "$SECOND"
 assert_contains "conflicting links are named, not just counted" \
   "commands/spec-base.md skills/spec-base-local" "$SECOND"
+assert_not_contains "the spec-base checkout is not re-cloned" "spec-base: cloning" "$SECOND"
 
 AFTER="$(in_workspace <<'SH'
 export PATH="$HOME/.local/bin:$PATH"
@@ -322,6 +345,15 @@ echo "nvimcfg=$(readlink -f ~/.config/nvim || echo none)"
 echo "backups=$(find ~ -maxdepth 1 -name '*.pre-dotfiles*' | wc -l)"
 echo "bashrc_blocks=$(grep -cF '# >>> dotfiles: coder git identity >>>' ~/.bashrc)"
 echo "profile_blocks=$(grep -cF '# >>> dotfiles: coder git identity >>>' ~/.profile)"
+echo "spec_argv=$(tail -1 ~/spec-base-stub.log 2>/dev/null)"
+echo "spec_clones=$(grep -c '^' ~/spec-base-stub.log 2>/dev/null || echo 0)"
+echo "spec_hub=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.env.HOME + "/.claude/spec-base-local/config.json", "utf8")).hub)' 2>/dev/null || echo none)"
+# Restore the pin the seeding step above overwrote. Without this, the
+# custom-marker value would persist on the volume and, under --keep, corrupt
+# the *next* invocation's fresh-install assertion that the hub is pinned to
+# hosted (that install_run would see config.json already present and, quite
+# correctly, leave the leftover marker alone).
+printf '{\n  "hub": "hosted"\n}\n' > ~/.claude/spec-base-local/config.json 2>/dev/null || true
 SH
 )"
 echo "$AFTER"
@@ -334,6 +366,17 @@ assert_contains "nvim config symlink survived the restart" \
 assert_contains "no duplicate backup on restart" "backups=1" "$AFTER"
 assert_contains "no duplicate bashrc block" "bashrc_blocks=1" "$AFTER"
 assert_contains "no duplicate profile block" "profile_blocks=1" "$AFTER"
+assert_contains "the restart re-links" "spec_argv=install" "$AFTER"
+# Truncated at the top of each install_run, so this counts invocations within the
+# restart alone: exactly one. Catches a step that calls the launcher twice per
+# start, and unlike a cumulative count it holds under --keep too.
+assert_contains "the launcher ran once per start" "spec_clones=1" "$AFTER"
+# The seeded value from install_run's heredoc, not "hosted": proves config.json
+# is left alone on a restart, rather than merely happening to still say hosted
+# (see the comment at the seeding site for why the latter would not distinguish
+# "not rewritten" from "rewritten identically").
+assert_contains "an existing config.json is not overwritten by the restart" \
+  "spec_hub=custom-marker" "$AFTER"
 
 echo
 echo "=== third install (unreachable spec-base repo, isolated claude dir) ==="
