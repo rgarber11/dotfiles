@@ -85,14 +85,29 @@ Flow:
    if the file is absent**. There is no container runtime in the pod, so local
    mode cannot work; but a file that already exists was written by hand, so it is
    left alone — and a `warn` if it says `local`, because that configuration
-   cannot work here. Same non-clobbering ethos as `backup_path` and the
-   `no-system-rc` marker.
-3. **Clone if missing.** One attempt, no waiting for credentials. On failure,
-   `rm -rf` the partial checkout and `warn`. Removing it is the point: the
-   idempotence check in step 4 is "does the checkout exist", so a half-populated
-   tree left behind would be reported as installed forever — the trap
-   `install_tarball` already guards against for tarballs. Because a failed clone
-   leaves nothing, the **next** workspace start retries automatically.
+   cannot work here, or if it is not readable JSON, which would otherwise fail
+   silently here and then break the launcher later. Both warnings name the remedy.
+   The value is read with `node -e`, not `grep`: a substring match for `local`
+   false-positives on any other value containing it. Same non-clobbering ethos as
+   `backup_path` and the `no-system-rc` marker.
+3. **Clone if missing.** One attempt, no waiting for credentials, and
+   `GIT_TERMINAL_PROMPT=0` so a hand-run `dotup` in a terminal fails instead of
+   stalling on a username prompt.
+
+   Amended after review, which found the original design here could destroy data:
+   the clone goes into a sibling `.checkout.tmp` and is `mv`d into place only on
+   success — a same-directory `rename(2)`, so unlike `install_tarball`'s
+   cross-filesystem case it cannot half-move. **Nothing at the checkout path is
+   ever deleted.** The original "`rm -rf` the partial checkout on failure" paired
+   with a `-d .git` existence test, which meant a hand-populated `checkout/` got
+   destroyed, and a worktree-style checkout — where `.git` is a regular file — read
+   as "not installed" and got deleted too. Staging also fixes the case that guard
+   was meant to cover but missed: a clone SIGKILLed partway (OOM in a
+   memory-limited pod) now leaves only `.checkout.tmp`, so the checkout path still
+   reads "absent" and the next start retries, rather than reading "installed" over
+   a broken tree forever. An empty directory at the path is `rmdir`-ed first, which
+   can only ever succeed on an empty one; anything else there gets a warn naming
+   the remedy, not a deletion.
 4. **Link.** `node "$LAUNCHER" install` — the launcher's link-only subcommand
    (`requireGit: false`, no hub needed, no network). It relinks
    `~/.claude/skills/spec-base-local` and the five `~/.claude/commands/spec-base*.md`,
