@@ -40,7 +40,14 @@ BOOTSTRAP_MARKER="$HOME/.local/state/dotfiles/nvim-bootstrapped"
 if command -v nvim >/dev/null 2>&1 && [ ! -f "$BOOTSTRAP_MARKER" ]; then
   info "bootstrapping neovim plugins (Lazy! restore)"
   want="$(grep -c '": {' "$HOME/.config/nvim/lazy-lock.json" 2>/dev/null || echo 0)"
-  nvim --headless "+Lazy! restore" +qa >/dev/null 2>&1 || true
+  # Bounded: this clones dozens of plugin repositories and was the last unbounded
+  # network operation in the profile. `|| true` stopped it aborting the install but
+  # not hanging it, and a hang here means install.sh never returns and the
+  # workspace never reports ready. 900s is deliberately generous -- a first
+  # bootstrap pulls every plugin plus treesitter parsers -- and truncation is
+  # already handled: the want/got check below sees the short count, warns, and the
+  # restore re-runs next start.
+  timeout -k 30 900 nvim --headless "+Lazy! restore" +qa >/dev/null 2>&1 || true
   got="$(find "$HOME/.local/share/nvim/lazy" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
   if [ "$want" -gt 0 ] && [ "$got" -ge "$want" ]; then
     # Guarded: an unwritable ~/.local/state would otherwise abort the install on

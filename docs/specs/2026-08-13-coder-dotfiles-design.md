@@ -209,9 +209,12 @@ same reason: an unguarded non-zero under `set -euo pipefail` aborted the install
 before the later steps ran at all. Every `curl` in this repo already carried
 `--max-time`; these git calls were the outliers among the *bounded* operations.
 
-Still unbounded, and the largest remaining hang surface: `30-neovim.sh`'s
-`nvim --headless "+Lazy! restore"`, which clones dozens of plugin repositories.
-Its `|| true` stops it aborting the install but not hanging it.
+`30-neovim.sh`'s `nvim --headless "+Lazy! restore"` was the last one — it clones
+dozens of plugin repositories, and its `|| true` stopped it aborting the install
+but not hanging it. Now `timeout -k 30 900`, generous because a first bootstrap
+pulls every plugin plus treesitter parsers, and safe to truncate because the
+existing want/got plugin count sees the short result, warns, and re-runs next
+start.
 
 No plugin manager. For a fixed set of five, a manager's value — resolution and
 lazy-loading across a churning list — does not apply, and it would add startup
