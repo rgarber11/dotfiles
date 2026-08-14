@@ -569,15 +569,19 @@ and after the existing restart assertions:
 ```bash
 assert_not_contains "the spec-base checkout is not re-cloned" "spec-base: cloning" "$SECOND"
 assert_contains "the restart re-links" "spec_argv=install" "$AFTER"
-# One line per install.sh run: two runs, two invocations, no extra work.
-assert_contains "the launcher ran once per start" "spec_clones=2" "$AFTER"
+# Truncated at the top of each install_run, so this counts invocations within the
+# restart alone: exactly one. Catches a step that calls the launcher twice per
+# start, and unlike a cumulative count it holds under --keep too.
+assert_contains "the launcher ran once per start" "spec_clones=1" "$AFTER"
 assert_contains "the hosted pin survives the restart" "spec_hub=hosted" "$AFTER"
 ```
 
 - [ ] **Step 2: Run the tests**
 
 Run: `./tests/run.sh`
-Expected: `all checks passed`. These are regression guards over behaviour Tasks 2 and 3 already built — if `spec_clones=2` fails with a higher number, something is invoking the launcher more than once per start.
+Expected: `all checks passed`. These are regression guards over behaviour Tasks 2 and 3 already built — if `spec_clones` comes back higher than 1, something is invoking the launcher more than once per start.
+
+Note the truncation in Task 3's `install_run` must land before this, or the count is cumulative and this assertion reads 2 on a fresh volume and something else under `--keep`.
 
 - [ ] **Step 3: Commit**
 
