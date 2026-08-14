@@ -186,10 +186,13 @@ assert_contains "a failed clone leaves no checkout behind" \
 - [ ] **Step 2: Run it to make sure it fails**
 
 Run: `./tests/run.sh`
-Expected: the first assertion passes (nothing runs yet, so `install.sh` finishes), and these two FAIL:
+Expected: exactly one FAIL, and `1 check(s) failed`:
 ```
   FAIL an unreachable spec-base repo warns instead of aborting (missing: spec-base: clone failed)
 ```
+The other two pass trivially at this point — with no step file, `install.sh` finishes
+and nothing ever creates a checkout. Only the warn assertion can go red, and that
+is the red run to look for.
 
 - [ ] **Step 3: Write the step — guard, hosted pin, clone**
 
@@ -277,6 +280,60 @@ git add headless/setup/99-spec-base-setup.sh tests/run.sh
 git commit -m "feat: clone the spec-base review layer, pinned to the hosted hub"
 ```
 
+#### Shipped: review-driven deviations from the code above
+
+Code review found four Important defects in the prescribed text above and one
+regression in the first fix for them. **`headless/setup/99-spec-base-setup.sh` as
+committed is the source of truth**, not the block above; these are the deltas and
+why each was necessary. Anyone re-deriving this work should write the shipped
+shape, not the original.
+
+1. **`spec_base_major="$(node --version)"` could abort the whole install.** A bare
+   assignment from a command substitution inherits that command's status, so a
+   `node` that exists but is broken (bad shared library, wrong arch, OOM) tripped
+   `set -e` — `command -v node` had already succeeded, so the guard did not help.
+   This is the exact trap `lib.sh:14-18` documents for `latest_release_tag`.
+   Shipped: `"$(node --version 2>/dev/null)" || spec_base_major=""`, which falls
+   through the existing `''` case.
+2. **The clone could block on an interactive credential prompt.** `credential.helper
+   = store` with no `~/.git-credentials` falls through to `/dev/tty`. At boot there
+   is no tty so it fails, but a hand-run `dotup` in a terminal would stall
+   indefinitely. Shipped: `GIT_TERMINAL_PROMPT=0` on the clone, making "one attempt,
+   no waiting" structural.
+3. **The `-d .git` guard paired with an unconditional `rm -rf` could delete a tree
+   that was not ours.** Three verified consequences: a hand-populated `checkout/`
+   with no `.git` got destroyed; a worktree-style `.git` *file* read as "not
+   installed" and a working tree got deleted; and a clone SIGKILLed partway left a
+   partial `.git` that `rm -rf` never reached, so every later start read
+   "installed" over a broken tree. Shipped: clone into a sibling
+   `.checkout.tmp` and `mv` into place (a same-directory `rename(2)`, so unlike
+   `install_tarball`'s cross-filesystem case it cannot half-move), guard on `-e`,
+   and an `elif` that warns and leaves a non-git occupant alone rather than
+   deleting it.
+4. **`rmdir` before the guard**, because change 3 regressed the case where an empty
+   `checkout/` used to self-heal — `git clone` succeeds into an empty directory, so
+   the old guard cloned straight in. `rmdir` refuses a non-empty directory, so it
+   recovers from an interrupted teardown without being able to delete content.
+5. **The third assertion could not fail.** git cleans up its own failed clone of a
+   nonexistent path, so `nocreds_checkout=absent` was true before the step existed
+   and stayed true if the cleanup were deleted. Its comment now claims only what it
+   proves, and a fourth assertion pre-seeds a leftover `.checkout.tmp` and asserts
+   it is cleared. Note even that covers only the *post*-clone `rm -rf`; the
+   pre-clone one is observable only when a clone succeeds, which needs Task 3's
+   fixture — see Task 3 Step 1b.
+6. Minors, all shipped: guarded `mkdir -p` and the `config.json` redirect (both
+   abort paths on a full or read-only PVC); a `node -e` JSON parse replacing
+   `grep '"local"'`, which false-positived on any value containing `local`, plus a
+   warn for malformed JSON; a warn on a failed `mv`; `chmod 644` to match the
+   sibling steps; a trailing `:` so the sourced file's exit status is structural;
+   and actionable remedies in both warnings.
+
+The invariant behind most of these: a step **sourced** into `install.sh` under
+`set -euo pipefail` must have no command that can fail unguarded, because aborting
+the install means a workspace with no shell, no nvim and no git identity. The
+trailing `:` protects only the file's *exit status* — a mid-file failure aborts
+immediately and never reaches it, which is why each guard is its own `if`.
+
 ---
 
 ### Task 3: Linking, proven against a fixture
@@ -342,6 +399,36 @@ assert_contains "the hub is pinned to hosted" "spec_hub=hosted" "$CHECKS"
 # A normal start must never run the networked update: it fetches and merges
 # origin/main, which is upgrade-only work in this repo.
 assert_contains "a normal start links only" "spec_argv=install" "$CHECKS"
+```
+
+- [ ] **Step 1b: Cover the pre-clone cleanup, which only a succeeding clone can show**
+
+Task 2's `nocreds_tmp=absent` assertion is satisfied by the *post*-clone `rm -rf`
+alone: delete the pre-clone one and it still passes. The pre-clone `rm -rf` is
+load-bearing for a different case — with a leftover `.checkout.tmp` present, an
+otherwise-succeeding `git clone` refuses outright ("destination path already exists
+and is not an empty directory"), so without that line the step would fail on every
+start forever. That is only observable where a clone succeeds, which is here.
+
+In `install_run`'s heredoc, after the fixture is built and before `install.sh` runs:
+
+```bash
+# A leftover temp dir from a clone killed partway through must be cleared, not
+# tripped over: git refuses to clone into a non-empty directory, so without the
+# pre-clone rm -rf the step would fail on every start from here on.
+mkdir -p ~/.claude/spec-base-local/.checkout.tmp
+echo junk > ~/.claude/spec-base-local/.checkout.tmp/junk
+```
+
+and in the `CHECKS` heredoc plus assertions:
+
+```bash
+echo "spec_junk=$([ -e ~/.claude/spec-base-local/checkout/junk ] && echo present || echo absent)"
+```
+
+```bash
+assert_contains "a leftover temp dir does not block a good clone" "spec_checkout=present" "$CHECKS"
+assert_contains "the leftover temp dir is not adopted as the checkout" "spec_junk=absent" "$CHECKS"
 ```
 
 - [ ] **Step 2: Run it to make sure it fails**
