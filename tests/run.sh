@@ -103,6 +103,14 @@ echo "fastfetch=$(command -v fastfetch || echo none)"
 echo "herdr=$(command -v herdr || echo none)"
 echo "zshrc=$(readlink -f ~/.zshrc || echo none)"
 echo "nvimcfg=$(readlink -f ~/.config/nvim || echo none)"
+# The dsp-base image sources its own /etc/zsh/dsp-base.zsh -- powerlevel10k and
+# the same five plugins -- from the stock /etc/zsh/zshrc, i.e. before ~/.zshrc.
+# This marker is what makes it stand down; without it every plugin loads twice.
+# This container mimics the image as it was BEFORE that config was baked in and
+# has no such file, so all that can be asserted here is that the marker gets
+# created. That it actually suppresses the system config is verified against
+# the real image.
+echo "no_system_rc=$([ -e ~/.config/zsh/no-system-rc ] && echo yes || echo no)"
 echo "gitconfig_first_line=$(head -1 ~/.gitconfig 2>/dev/null)"
 echo "git_email=$(git config --get user.email)"
 echo "zsh_ident=$(zsh -ic 'git var GIT_AUTHOR_IDENT' 2>/dev/null | tail -1)"
@@ -168,6 +176,7 @@ assert_contains "zshrc symlinks into the repo" \
   "zshrc=/home/coder/.config/coderv2/dotfiles/headless/zshrc" "$CHECKS"
 assert_contains "nvim config symlinks into the repo" \
   "nvimcfg=/home/coder/.config/coderv2/dotfiles/shared/nvim" "$CHECKS"
+assert_contains "the image's system zsh config is opted out of" "no_system_rc=yes" "$CHECKS"
 assert_contains "pre-existing zshrc was backed up, not clobbered" "backups=1" "$CHECKS"
 assert_contains "install.sh does not modify the dotfiles clone" "repo_status_delta=0" "$FIRST"
 

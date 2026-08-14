@@ -21,11 +21,23 @@ coder update <workspace> --parameter dotfiles_uri=https://github.com/rgarber11/d
 fastfetch, pulls the zsh plugins, and runs `herdr update`. Nothing else touches
 the network on a workspace start.
 
+The `dsp-base` image ships a zsh setup of its own — powerlevel10k, the same five
+plugins, and copies of `shared/zsh/{options,functions}.zsh` — sourced from
+`/etc/zsh/zshrc`, so before `~/.zshrc`. `headless/setup/05-system-zsh.sh` drops
+`~/.config/zsh/no-system-rc`, which makes it stand down and leaves this profile
+in sole charge; without it every plugin would load twice. The profile stays
+self-sufficient rather than layering onto the image's config, so `install.sh`
+still produces a working shell on a plain Ubuntu box — the steps the image has
+made redundant (terminfo, chafa, fastfetch, most of the apt packages, `chsh`)
+all guard on the tool being absent and simply go quiet there.
+
 ## Testing
 
 `./tests/run.sh` runs `install.sh` in a podman container that mimics the
-`dsp-base` image, using a named volume for `/home/coder` so the
-persistent-`$HOME`/ephemeral-`/usr` split is reproduced faithfully.
+`dsp-base` image *before* the shell config was baked into it, using a named
+volume for `/home/coder` so the persistent-`$HOME`/ephemeral-`/usr` split is
+reproduced faithfully. That the opt-out marker actually suppresses the image's
+config is verified against the real image, which the harness does not pull.
 
 See `docs/specs/2026-08-13-coder-dotfiles-design.md` for the full design.
 
