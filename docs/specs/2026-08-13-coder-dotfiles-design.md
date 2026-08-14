@@ -200,6 +200,15 @@ Five plugins, installed by plain `git clone` into
 `~/.local/share/zsh/plugins` (on the PVC; `20-zsh-plugins.sh` clones only what
 is missing, and can `git pull` each in a loop to update).
 
+Amended 2026-08-14: both git calls are wrapped in `timeout -k 10 120`, and the
+`mkdir` and the `rm -rf` of an incomplete checkout are guarded. git has no
+built-in timeout, and an egress that drops packets rather than resetting them
+makes a clone hang instead of fail — which parks the whole workspace boot, since
+this step is sourced into `install.sh` and runs early. The guards exist for the
+same reason: an unguarded non-zero under `set -euo pipefail` aborted the install
+before the later steps ran at all. Every `curl` in this repo already carried
+`--max-time` for the same reason; these were the outliers.
+
 No plugin manager. For a fixed set of five, a manager's value — resolution and
 lazy-loading across a churning list — does not apply, and it would add startup
 cost plus a layer of indirection. `dotup` (below) handles updates with a

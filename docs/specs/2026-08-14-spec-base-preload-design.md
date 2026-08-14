@@ -151,8 +151,18 @@ Flow:
    whose merge conflicted printed a cheerful `6 links already correct` and nothing
    else — discarding the only signals `update` exists to produce. Each of
    pull-failed, dirty-checkout, fetch-failed and merge-conflict now warns with the
-   path to fix it. `GIT_TERMINAL_PROMPT=0` wraps this call too, for the same reason
-   the clone sets it: the launcher shells out to git and never sets it itself.
+   path to fix it, and so does `skillDrift` — which only populates on a merge that
+   *succeeded*, so the failure tokens alone would have left it silent, defeating the
+   reason it exists (the skill should be updated deliberately, not invalidated
+   quietly). `GIT_TERMINAL_PROMPT=0` wraps this call too, for the same reason the
+   clone sets it: the launcher shells out to git and never sets it itself.
+
+   Both the clone and this call are also wrapped in `timeout -k 10 300`, because
+   `GIT_TERMINAL_PROMPT=0` closes the *prompt* stall and not the *network* one: git
+   has no built-in timeout, and an egress that drops packets rather than resetting
+   them hangs instead of failing. A hang here is the one failure that outranks the
+   layer not installing — `install.sh` never returns, so the workspace never
+   reports ready.
 
    `SPEC_BASE_BRANCH` is also checked against the checkout's actual branch here,
    because it governs clones only — see above. What
