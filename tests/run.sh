@@ -68,6 +68,12 @@ cp -r /repo ~/.config/coderv2/dotfiles
 # volume across separate ./tests/run.sh invocations, so a stale build would
 # silently keep testing an old stub after editing it.
 #
+# Note this only refreshes the fixture, not the copy that actually executes. The
+# step clones the fixture into ~/.claude/spec-base-local/checkout, and under
+# --keep that checkout persists and is never re-cloned -- so the *cloned* stub
+# stays whatever the first invocation captured. Editing the stub and iterating
+# with --keep still tests the old one; wipe the volume (a plain run) for that.
+#
 # Note for whoever automates the UPGRADE=1 path later: rebuilding gives the
 # fixture a fresh, unrelated root commit each run, so a `git fetch && merge`
 # against it (what `update` does) would fail with "refusing to merge unrelated
@@ -82,9 +88,11 @@ cat > "$FIXTURE/packages/spec-base-local/bin/spec-base-local.mjs" <<'STUB'
 import { appendFileSync } from 'node:fs';
 appendFileSync(`${process.env.HOME}/spec-base-stub.log`, `${process.argv.slice(2).join(' ')}\n`);
 const cmd = process.argv[2];
-// Enforce the subcommand contract, not just log it: a typo in the flags this
-// step passes should fail loudly here, rather than silently produce a report
-// shaped like nothing the real launcher would ever emit.
+// Enforce the subcommand contract, not just log it: a wrong subcommand should
+// fail loudly here rather than silently produce a report shaped like nothing the
+// real launcher would emit. Note this checks the subcommand only -- the step's
+// --hosted/--repo/--branch flags are not validated, so do not read this as
+// covering their spelling.
 if (cmd !== 'install' && cmd !== 'update') {
   process.exit(2);
 }
@@ -375,8 +383,17 @@ assert_not_contains "difftastic not re-downloaded" "downloading difft"     "$SEC
 assert_not_contains "fastfetch not re-downloaded" "downloading fastfetch" "$SECOND"
 assert_not_contains "herdr not reinstalled"       "installing herdr"      "$SECOND"
 assert_contains "install.sh does not modify the dotfiles clone (restart)" "repo_status_delta=0" "$SECOND"
-assert_contains "conflicting links are named, not just counted" \
-  "commands/spec-base.md skills/spec-base-local" "$SECOND"
+# The reason in parentheses is the launcher's own, carried through rather than
+# assumed: "not a symlink" wants the file moved aside, "target missing" wants a
+# reclone, and the step used to print the first for both.
+assert_contains "conflicting links are named with the launcher's reason" \
+  "commands/spec-base.md; skills/spec-base-local (not a symlink)" "$SECOND"
+# The regression this locks actually happened: with conflicts present and nothing
+# correct, the steady-state branch printed "0 links already correct" -- a sentence
+# whose own number contradicts its verb. This restart reports 0/0/0/2, so it is
+# the run that would show it.
+assert_not_contains "zero correct links are never called 'already correct'" \
+  "spec-base: 0 links already correct" "$SECOND"
 assert_not_contains "the spec-base checkout is not re-cloned" "spec-base: cloning" "$SECOND"
 
 AFTER="$(in_workspace <<'SH'

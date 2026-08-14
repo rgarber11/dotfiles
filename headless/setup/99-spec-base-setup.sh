@@ -130,6 +130,17 @@ else
   elif [ ! -f "$spec_base_launcher" ]; then
     warn "spec-base: $spec_base_checkout has no launcher at packages/spec-base-local/bin/spec-base-local.mjs; delete it and re-run to reclone"
   else
+    # SPEC_BASE_BRANCH governs the clone only: an existing checkout keeps whatever
+    # branch it is on, because the launcher's update pulls the checkout's own HEAD.
+    # So changing the default here does nothing on a PVC that has already cloned --
+    # which is exactly what will happen when the fork merges to main. Say so rather
+    # than let it drift silently. Offline: rev-parse reads .git, nothing else.
+    spec_base_head="$(git -C "$spec_base_checkout" rev-parse --abbrev-ref HEAD 2>/dev/null)" ||
+      spec_base_head=""
+    if [ -n "$spec_base_head" ] && [ "$spec_base_head" != "$SPEC_BASE_BRANCH" ]; then
+      warn "spec-base: the checkout is on $spec_base_head, not $SPEC_BASE_BRANCH; that only governs new clones, so switch it in $spec_base_checkout or delete it to reclone"
+    fi
+
     # `install` is link-only: no network, no git repo, no hub. `update` also
     # fast-forwards this branch and merges origin/main, so it is upgrade-only --
     # the rule every other step in this profile follows. /spec-base-update inside
@@ -143,7 +154,11 @@ else
     # trace on failure) flows straight to the console, same as git clone's
     # above -- worth more in a failure boot log than success-path silence
     # would be worth in return.
-    if spec_base_report="$(node "$spec_base_launcher" "${spec_base_cmd[@]}")"; then
+    # GIT_TERMINAL_PROMPT=0 here for the same reason the clone sets it: `update`
+    # shells out to git fetch/pull/merge, the launcher never sets it, and a
+    # hand-run `dotup` in a terminal would otherwise stall on a username prompt
+    # instead of failing and warning.
+    if spec_base_report="$(GIT_TERMINAL_PROMPT=0 node "$spec_base_launcher" "${spec_base_cmd[@]}")"; then
       # node -e and not jq: node is a hard requirement two lines up, jq is not
       # guaranteed anywhere. `install` spreads its counts at the top level while
       # `update` nests them under "install", so accept either.
@@ -158,8 +173,29 @@ else
         // already has, so a bare-string conflict entry has a non-nullish
         // .link (a function) and "??" never falls through to it -- hence the
         // typeof guard instead of a plain "c.link ?? c".
-        const p = (c) => (c && typeof c === "object" ? (c.link ?? JSON.stringify(c)) : String(c));
-        console.log((i.conflicts ?? []).map(p).join(" "));
+        //
+        // Carry the reason the launcher itself reported: it emits either "exists
+        // and is not a symlink" or "target missing: <path>", which need different
+        // fixes, so naming one of them for both would misdiagnose half the cases.
+        // Joined with "; " because a reason contains spaces.
+        const p = (c) => {
+          if (!c || typeof c !== "object") return String(c);
+          if (!c.link) return JSON.stringify(c);
+          return c.reason ? `${c.link} (${c.reason})` : c.link;
+        };
+        console.log((i.conflicts ?? []).map(p).join("; "));
+        // Third line: trouble only `update` can report. These live at the top
+        // level of its report, never under .install, and the counts cannot show
+        // them -- so without this a dotup whose fetch died or whose origin/main
+        // merge conflicted printed a cheerful "6 links already correct" and
+        // nothing else. Tokens, not git messages, so the shell can split them
+        // one per warn without worrying about embedded spaces.
+        const t = [];
+        if (r.ownBranch?.failed) t.push("pull-failed");
+        if (r.ownBranch?.dirty || r.merge?.dirty) t.push("dirty");
+        if (r.upstream?.fetchFailed) t.push("fetch-failed");
+        if (r.merge?.conflict) t.push("merge-conflict");
+        console.log(t.join(" "));
       ' <<<"$spec_base_report" 2>/dev/null)" || spec_base_output=""
       if [ -n "$spec_base_output" ]; then
         # mapfile, not a `... | tail -1` pipeline: under `set -o pipefail` a
@@ -172,6 +208,7 @@ else
         # away, and an empty array here would be a set -u abort, not a fallback.
         spec_base_counts="${spec_base_lines[0]:-}"
         spec_base_conflicts="${spec_base_lines[1]:-}"
+        spec_base_trouble="${spec_base_lines[2]:-}"
         read -r spec_base_new spec_base_re spec_base_ok spec_base_bad <<<"$spec_base_counts"
         if [ "$spec_base_new" = 0 ] && [ "$spec_base_re" = 0 ] && [ "$spec_base_ok" = 0 ] && [ "$spec_base_bad" = 0 ]; then
           # Every count zero means the launcher linked nothing at all, not that
@@ -189,8 +226,30 @@ else
         else
           info "spec-base: linked $spec_base_new, relinked $spec_base_re, already correct $spec_base_ok"
         fi
+        # Each entry carries the launcher's own reason, so this no longer asserts
+        # which of the two it was: "exists and is not a symlink" wants the file
+        # moved aside, "target missing" means the checkout is incomplete and wants
+        # a reclone. Saying one for both sent half the cases the wrong way.
         if [ -n "$spec_base_conflicts" ]; then
-          warn "spec-base: $spec_base_bad link(s) not linked (something there is not a symlink): $spec_base_conflicts; move them aside and re-run"
+          warn "spec-base: $spec_base_bad link(s) not created: $spec_base_conflicts -- resolve those paths and re-run"
+        fi
+        # Only `update` can populate these, and only `dotup` runs update -- but
+        # when it does, a failed fetch or a conflicted merge is the whole point of
+        # having run it, and the link counts above say nothing about either.
+        if [ -n "$spec_base_trouble" ]; then
+          read -ra spec_base_troubles <<<"$spec_base_trouble"
+          for spec_base_t in "${spec_base_troubles[@]}"; do
+            case "$spec_base_t" in
+              pull-failed)
+                warn "spec-base: could not fast-forward $SPEC_BASE_BRANCH; the skill and commands are the version already on disk" ;;
+              dirty)
+                warn "spec-base: the checkout has uncommitted changes, so nothing was pulled or merged; commit or discard them in $spec_base_checkout" ;;
+              fetch-failed)
+                warn "spec-base: could not fetch origin/main; coworkers' fixes were not merged" ;;
+              merge-conflict)
+                warn "spec-base: origin/main conflicts with $SPEC_BASE_BRANCH; the merge was aborted, so resolve it by hand in $spec_base_checkout" ;;
+            esac
+          done
         fi
       else
         info "spec-base: ${spec_base_cmd[0]} finished"

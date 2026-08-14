@@ -44,8 +44,9 @@ there.
 
 The clone gets one attempt and does not wait, which is why the step is
 numbered last: git credentials come from Coder's external auth via an
-independent startup script, and node 22+ is required — the image has it,
-noble does not. It clones into a staging directory and moves that into place
+independent startup script, so running last gives that script the longest head
+start. The step also needs node 22+, which the image has and noble does not, and
+warns rather than installing one. It clones into a staging directory and moves that into place
 only on success: the only installed-check is whether the checkout path
 exists, so a half-built tree there would read as installed forever. A failed
 or interrupted clone just warns, and the next start retries. `dotup` (or
