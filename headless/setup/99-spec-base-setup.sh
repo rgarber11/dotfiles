@@ -129,28 +129,45 @@ else
     else
       spec_base_cmd=(install)
     fi
+    # $spec_base_report captures only stdout; the launcher's stderr (a stack
+    # trace on failure) flows straight to the console, same as git clone's
+    # above -- worth more in a failure boot log than success-path silence
+    # would be worth in return.
     if spec_base_report="$(node "$spec_base_launcher" "${spec_base_cmd[@]}")"; then
       # node -e and not jq: node is a hard requirement two lines up, jq is not
       # guaranteed anywhere. `install` spreads its counts at the top level while
       # `update` nests them under "install", so accept either.
       # shellcheck disable=SC2016 # the ${...} below are JS template-literal
       # interpolations, not shell expansions -- the single quotes are correct.
-      spec_base_counts="$(node -e '
+      spec_base_output="$(node -e '
         const r = JSON.parse(require("fs").readFileSync(0, "utf8"));
         const i = r.install ?? r;
         const n = (a) => (a ?? []).length;
         console.log(`${n(i.linked)} ${n(i.relinked)} ${n(i.alreadyCorrect)} ${n(i.conflicts)}`);
-      ' <<<"$spec_base_report" 2>/dev/null)" || spec_base_counts=""
-      if [ -n "$spec_base_counts" ]; then
+        console.log((i.conflicts ?? []).map((c) => c.link ?? c).join(" "));
+      ' <<<"$spec_base_report" 2>/dev/null)" || spec_base_output=""
+      if [ -n "$spec_base_output" ]; then
+        # mapfile, not a `... | tail -1` pipeline: under `set -o pipefail` a
+        # failing pipe stage there would be an unguarded top-level command and
+        # abort the install. mapfile always returns 0, even reading a single
+        # line or an empty here-string.
+        mapfile -t spec_base_lines <<<"$spec_base_output"
+        spec_base_counts="${spec_base_lines[0]}"
+        spec_base_conflicts="${spec_base_lines[1]:-}"
         read -r spec_base_new spec_base_re spec_base_ok spec_base_bad <<<"$spec_base_counts"
-        info "spec-base: linked $spec_base_new, relinked $spec_base_re, already correct $spec_base_ok"
-        [ "$spec_base_bad" = 0 ] ||
-          warn "spec-base: $spec_base_bad link(s) skipped; something in ~/.claude is not a symlink"
+        if [ "$spec_base_new" = 0 ] && [ "$spec_base_re" = 0 ]; then
+          info "spec-base: $spec_base_ok links already correct"
+        else
+          info "spec-base: linked $spec_base_new, relinked $spec_base_re, already correct $spec_base_ok"
+        fi
+        if [ -n "$spec_base_conflicts" ]; then
+          warn "spec-base: $spec_base_bad link(s) not linked (something there is not a symlink): $spec_base_conflicts; move them aside and re-run"
+        fi
       else
         info "spec-base: ${spec_base_cmd[0]} finished"
       fi
     else
-      warn "spec-base: ${spec_base_cmd[0]} failed; run /spec-base-update in a session"
+      warn "spec-base: ${spec_base_cmd[0]} failed; re-run \`node $spec_base_launcher install\` for the error"
     fi
   fi
 fi
