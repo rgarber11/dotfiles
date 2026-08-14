@@ -207,7 +207,11 @@ makes a clone hang instead of fail — which parks the whole workspace boot, sin
 this step is sourced into `install.sh` and runs early. The guards exist for the
 same reason: an unguarded non-zero under `set -euo pipefail` aborted the install
 before the later steps ran at all. Every `curl` in this repo already carried
-`--max-time` for the same reason; these were the outliers.
+`--max-time`; these git calls were the outliers among the *bounded* operations.
+
+Still unbounded, and the largest remaining hang surface: `30-neovim.sh`'s
+`nvim --headless "+Lazy! restore"`, which clones dozens of plugin repositories.
+Its `|| true` stops it aborting the install but not hanging it.
 
 No plugin manager. For a fixed set of five, a manager's value — resolution and
 lazy-loading across a churning list — does not apply, and it would add startup

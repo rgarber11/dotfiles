@@ -97,12 +97,12 @@ else
     # One attempt, no waiting for credentials: they come from a startup script
     # that runs independently of this one. GIT_TERMINAL_PROMPT=0 keeps a manual
     # `dotup` from stalling on a username prompt instead of failing.
-    # Both rm -rf calls are `|| true`: a leftover staging dir this user cannot
-    # delete (a PVC whose ~/.claude ownership shifted, a read-only volume) would
-    # otherwise be an unguarded non-zero and abort install.sh -- note mkdir -p on
-    # an existing root returns 0, so the guard above does not catch it. Ignoring
-    # the failure leaves the clone to fail on the non-empty directory instead,
-    # which warns and retries next start like any other clone failure.
+    # Both rm -rf calls are guarded: a leftover staging dir this user cannot delete
+    # (a PVC whose ~/.claude ownership shifted, a read-only volume) would otherwise
+    # be an unguarded non-zero and abort install.sh -- note mkdir -p on an existing
+    # root returns 0, so the guard above does not catch it. `|| warn` rather than
+    # `|| true` because the clone below then fails on the leftover directory, and
+    # "clone failed" alone would misattribute the cause to the network.
     spec_base_tmp="$spec_base_root/.checkout.tmp"
     rm -rf "$spec_base_tmp" || warn "spec-base: could not clear $spec_base_tmp"
     # timeout, because GIT_TERMINAL_PROMPT=0 closes the prompt stall but not the
@@ -118,7 +118,10 @@ else
         warn "spec-base: could not move the clone into place; retrying next start"
     else
       rm -rf "$spec_base_tmp" || warn "spec-base: could not clear $spec_base_tmp"
-      warn "spec-base: clone failed (git credentials not written yet?); retrying next start"
+      # Deliberately not "credentials not written yet" alone: exit 124 from the
+      # timeout above lands here too, and blaming a 300s network hang on missing
+      # credentials would send the reader looking in the wrong place.
+      warn "spec-base: clone failed or timed out (git credentials not written yet?); retrying next start"
     fi
   elif [ ! -e "$spec_base_checkout/.git" ]; then
     # Something that is not a clone is sitting in the way. Deleting it is not

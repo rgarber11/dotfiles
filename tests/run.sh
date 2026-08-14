@@ -130,8 +130,14 @@ const trouble = process.env.STUB_TROUBLE === '1'
       drift: { files: ['skills/protocol.md', 'packages/shared/src/schemas.ts'] },
     }
   : {};
+// STUB_TROUBLE forces the NESTED shape even for `install`, and that is the whole
+// point of it: trouble/drift live at the report's top level while counts live
+// under "install", so only the nested shape can tell `r.drift` from `i.drift`.
+// Spread flat, `r.install` is undefined, `i = r.install ?? r` makes i === r, and
+// the five trouble assertions pass either way -- blind to the one distinction the
+// third and fourth parser lines rest on, which would be wrong on a real update.
 const report =
-  cmd === 'update'
+  cmd === 'update' || process.env.STUB_TROUBLE === '1'
     ? { checkout: 'stub', install, ...trouble }
     : { checkout: 'stub', ...install, ...trouble };
 console.log(JSON.stringify(report));
