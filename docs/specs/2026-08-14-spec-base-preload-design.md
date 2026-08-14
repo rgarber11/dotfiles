@@ -97,8 +97,16 @@ Flow:
    (`requireGit: false`, no hub needed, no network). It relinks
    `~/.claude/skills/spec-base-local` and the five `~/.claude/commands/spec-base*.md`,
    which is what makes this idempotent across restarts. Its JSON report is parsed
-   with `node -e` — guaranteed present here, unlike `jq` — into one `info` line of
-   counts, and a non-empty `conflicts` array becomes a `warn`.
+   with `node -e` — guaranteed present here, unlike `jq`.
+
+   Reporting, amended after review: the steady-state boot (nothing linked, nothing
+   relinked) says `spec-base: 6 links already correct`, so it reads at a glance like
+   its neighbours — `nvim v0.11 already installed`, `apt: all packages present` —
+   rather than three numbers the reader has to add up. A boot that changed something
+   keeps the full `linked N, relinked N, already correct N`. A non-empty `conflicts`
+   array becomes a `warn` **naming the paths**, not just counting them: a conflict
+   means a real file is sitting where a symlink belongs, so the layer is partly
+   broken, and a bare count leaves the user to go find which of six links failed.
 5. **`--upgrade` only.** `node "$LAUNCHER" update --hosted --repo "$REPO" --branch "$BRANCH"`,
    which fast-forwards the fork branch, merges `origin/main` for coworkers' hub
    and viewer fixes, and relinks. Never on a normal start: that matches
@@ -143,6 +151,14 @@ step's wiring is right and that its failure path is safe.
    `config.json` reads `hosted`, and the stub was invoked with **`install`**, not
    `update`. This deliberately stops at our boundary; the launcher has its own
    suite in `packages/spec-base-local/test/`.
+
+   Be honest about what that boundary costs: the suite asserts **invocation, never
+   outcome**. A launcher whose `install` silently no-ops passes everything here, so
+   nothing automated proves a single symlink appears — the manual `ls -l` in §3's
+   checklist is the only check of that, and it must stay a named manual step rather
+   than quietly reading as covered. The stub does emit the nested `update` report
+   shape and rejects an unrecognised subcommand, so the parser's `report.install ??
+   report` line and our flag spelling are covered mechanically.
 3. **Restart path** — a new container on the same volume: no second clone, the
    stub gets `install` again, and `config.json` is not rewritten.
 4. **Failure path**, the honest test of clone-once-and-warn: a run with a bogus

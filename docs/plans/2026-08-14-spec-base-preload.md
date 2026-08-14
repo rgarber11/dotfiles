@@ -495,6 +495,45 @@ git add headless/setup/99-spec-base-setup.sh tests/run.sh
 git commit -m "feat: link the spec-base skill and commands on every start"
 ```
 
+#### Shipped: review-driven deviations from the code above
+
+As with Task 2, **the committed `headless/setup/99-spec-base-setup.sh` is the source
+of truth**, not the block above. Deltas:
+
+1. **The plan's `if [ ! -f "$spec_base_launcher" ]; then : # already warned` was
+   silent in a state nothing else warns about** — a checkout that exists and is a
+   valid git repo but has no launcher at that path (upstream restructure, broken
+   partial clone), including the worktree-style `.git`-file case the clone block
+   deliberately accepts in silence. Shipped: a three-way split keyed on `.git`, so
+   that state gets its own warning and only genuinely already-warned states stay
+   quiet.
+2. **`warn "… run /spec-base-update in a session"` was dead-end advice.** The five
+   `/spec-base*` commands are created *by* the invocation that just failed, so on
+   first boot they do not exist. Shipped: the remedy names the shell command
+   (`node <launcher> install`) instead.
+3. **Conflicts are reported by path, not by count**, and the steady-state `info`
+   collapses to `N links already correct`. Both were the design's prescription
+   rather than implementer choices, so the design doc was amended alongside.
+4. **`# shellcheck disable=SC2016`** above the `node -e` block: the JS template
+   literals inside single quotes are a genuine false positive. Precedent:
+   `bin/fasterfetch`.
+5. **Test fixes:** one of the two `spec_checkout=present` assertions was an exact
+   duplicate and was dropped; `spec_junk=absent` could not fail under any plausible
+   mutation and was retargeted to `.checkout.tmp` being absent after a *successful*
+   clone (which a `cp`-instead-of-`mv` mutation does falsify); the pre-seed is now
+   gated on the checkout being absent, so it cannot litter the post-restart state;
+   and the fixture is rebuilt unconditionally so `--keep` cannot test a stale stub.
+6. **Stub upgraded** to emit the nested `update` report shape and to `exit 2` on an
+   unrecognised subcommand, giving the parser's `report.install ?? report` line and
+   our flag spelling mechanical coverage.
+
+Declined for now, recorded so they are not lost: converting the node and `mkdir`
+guards to early `return`s (verified to work from a sourced step, and it would
+unindent ~110 lines and retire the trailing `:`, but it rewrites Task 2's reviewed
+code and would need its state enumeration re-run); a stub knob to synthesise
+conflicts, so the new per-path warn ships untested; and a bash NUL-byte warning that
+can reach the boot log without affecting the parse.
+
 ---
 
 ### Task 4: The restart path
@@ -507,6 +546,17 @@ git commit -m "feat: link the spec-base skill and commands on every start"
 - [ ] **Step 1: Write the test**
 
 In the `AFTER` heredoc (the post-restart assertions), add:
+
+The stub log lives on the PVC, so counting its lines only means "one invocation per
+start" on a fresh volume — under `./tests/run.sh --keep` a leftover log inflates the
+count and fails for no reason. Truncate it at the top of `install_run` (before
+`install.sh`) so the count is always of this suite run:
+
+```bash
+: > ~/spec-base-stub.log
+```
+
+Then, in the `AFTER` heredoc:
 
 ```bash
 echo "spec_argv=$(tail -1 ~/spec-base-stub.log 2>/dev/null)"
