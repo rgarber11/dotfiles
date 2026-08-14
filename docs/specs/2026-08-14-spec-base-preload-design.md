@@ -1,7 +1,7 @@
 # Preloading the spec-base local review layer — design
 
 Date: 2026-08-14
-Status: approved, not yet implemented
+Status: implemented 2026-08-14
 
 ## Goal
 

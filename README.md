@@ -18,8 +18,9 @@ coder update <workspace> --parameter dotfiles_uri=https://github.com/rgarber11/d
 ```
 
 `dotup` inside the workspace re-resolves the latest Neovim, difftastic and
-fastfetch, pulls the zsh plugins, and runs `herdr update`. Nothing else touches
-the network on a workspace start.
+fastfetch, pulls the zsh plugins, runs `herdr update`, and updates spec-base
+(see below). Nothing else touches the network on a workspace start, except the
+one-time spec-base clone below.
 
 The `dsp-base` image ships a zsh setup of its own — powerlevel10k, the same five
 plugins, and copies of `shared/zsh/{options,functions}.zsh` — sourced from
@@ -30,6 +31,27 @@ self-sufficient rather than layering onto the image's config, so `install.sh`
 still produces a working shell on a plain Ubuntu box — the steps the image has
 made redundant (terminfo, chafa, fastfetch, most of the apt packages, `chsh`)
 all guard on the tool being absent and simply go quiet there.
+
+`headless/setup/99-spec-base-setup.sh` preloads the spec-base local review
+layer — six symlinks in total: `~/.claude/skills/spec-base-local` plus five
+`/spec-base*` commands — out of a managed clone at
+`~/.claude/spec-base-local/checkout`. That clone happens once — `$HOME` is the
+PVC — and later starts only re-link, which needs no network. It is pinned to
+the hosted hub on janice (`config.json`, written only if absent) because a
+workspace is a k8s pod with no podman or docker, so the local hub cannot run
+there.
+
+The clone gets one attempt and does not wait, which is why the step is
+numbered last: the git credentials come from Coder's external auth via a
+startup script that runs independently of this one. It clones into a staging
+directory and moves that into place only on success, so a failed or
+interrupted clone never leaves a half-built tree at the real checkout path to
+be mistaken for an installed one — it just warns, and the next workspace start
+retries. (Something other than a git checkout already sitting at that path is
+left alone the same way — the step warns instead of deleting it, and moving it
+aside by hand is what lets the next start pick it up.) `dotup` (or
+`/spec-base-update` inside a session) is what fast-forwards the branch and
+merges `origin/main` for coworkers' viewer fixes; a normal start never does.
 
 ## Testing
 
