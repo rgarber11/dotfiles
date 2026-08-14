@@ -37,7 +37,10 @@ fi
 
 # Ubuntu ships fd as fdfind to avoid a name clash.
 if command -v fdfind >/dev/null 2>&1 && [ ! -e "$HOME/.local/bin/fd" ]; then
-  ln -sfn "$(command -v fdfind)" "$HOME/.local/bin/fd"
+  # Guarded like every other filesystem write in this profile: unguarded, a
+  # read-only ~/.local/bin aborts the whole install over a convenience symlink.
+  ln -sfn "$(command -v fdfind)" "$HOME/.local/bin/fd" ||
+    warn "could not link fd -> fdfind"
   info "linked fd -> fdfind"
 fi
 

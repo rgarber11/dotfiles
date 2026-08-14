@@ -43,7 +43,11 @@ if command -v nvim >/dev/null 2>&1 && [ ! -f "$BOOTSTRAP_MARKER" ]; then
   nvim --headless "+Lazy! restore" +qa >/dev/null 2>&1 || true
   got="$(find "$HOME/.local/share/nvim/lazy" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
   if [ "$want" -gt 0 ] && [ "$got" -ge "$want" ]; then
-    touch "$BOOTSTRAP_MARKER"
+    # Guarded: an unwritable ~/.local/state would otherwise abort the install on
+    # this line, having already done the expensive part successfully. Without the
+    # marker the next start just re-runs the restore, which is idempotent.
+    touch "$BOOTSTRAP_MARKER" ||
+      warn "could not write $BOOTSTRAP_MARKER; the restore will re-run next start"
     info "neovim plugins installed ($got/$want)"
   else
     warn "neovim bootstrap incomplete ($got/$want plugins); will retry next start"

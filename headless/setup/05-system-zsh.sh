@@ -16,12 +16,21 @@
 MARKER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/zsh"
 MARKER="$MARKER_DIR/no-system-rc"
 
+# Both guarded: this is the earliest numbered step, so an unguarded non-zero here
+# (an unwritable ~/.config, a full PVC) aborts install.sh before anything else
+# runs -- no shell config, no nvim, no git identity. Warning instead costs a
+# double-loaded prompt, which is cosmetic by comparison.
 if [ ! -e "$MARKER" ]; then
-  mkdir -p "$MARKER_DIR"
-  cat > "$MARKER" <<'EOF'
+  if ! mkdir -p "$MARKER_DIR"; then
+    warn "could not create $MARKER_DIR; the image's zsh config will keep loading alongside ours"
+  elif cat > "$MARKER" <<'EOF'
 # Presence of this file tells /etc/zsh/dsp-base.zsh (dsp-base image) to return
 # immediately, leaving ~/.zshrc to configure the shell on its own.
 # Created by ~/dotfiles/headless/setup/05-system-zsh.sh.
 EOF
-  info "claimed the shell from the image's /etc/zsh/dsp-base.zsh"
+  then
+    info "claimed the shell from the image's /etc/zsh/dsp-base.zsh"
+  else
+    warn "could not write $MARKER; the image's zsh config will keep loading alongside ours"
+  fi
 fi
