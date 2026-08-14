@@ -21,7 +21,21 @@ podman volume create "$VOLUME" >/dev/null 2>&1 || true
 podman build -q -t "$IMAGE" -f "$HERE/Containerfile" "$HERE" >/dev/null
 
 # Each invocation is a NEW container on the SAME volume: /usr resets, $HOME persists.
+# $1, if "restart", is the only way in to the two spec-base-only knobs below --
+# not env vars a caller could leave exported. STUB_CONFLICTS and SEED_HUB_MARKER
+# are 100% correlated (both only ever apply to the restart call), and an env-var
+# form has a real hazard: a developer exporting SEED_HUB_MARKER while debugging
+# would make the *first* install_run call of every future invocation seed the
+# marker too -- corrupting that run's own "hub is pinned to hosted" assertion
+# with no hint why. A positional argument can't leak like that, and it also
+# stops passing a spec-base-only knob into the three container roles that
+# ignore it (the CHECKS and AFTER probes, and nocreds_run).
 in_workspace() {
+  local stub_conflicts=0 seed_hub_marker=0
+  if [ "${1:-}" = restart ]; then
+    stub_conflicts=1
+    seed_hub_marker=1
+  fi
   # The GIT_* values mimic what the Coder agent exports. They are deliberately
   # WRONG so the identity assertions actually prove .zshenv/.bashrc beat them;
   # without these the test would pass even if the unset were missing entirely.
@@ -33,13 +47,13 @@ in_workspace() {
     -e GIT_AUTHOR_EMAIL=wrong@example.com \
     -e GIT_COMMITTER_NAME="Wrong Person" \
     -e GIT_COMMITTER_EMAIL=wrong@example.com \
-    -e STUB_CONFLICTS="${STUB_CONFLICTS:-0}" \
-    -e SEED_HUB_MARKER="${SEED_HUB_MARKER:-0}" \
+    -e STUB_CONFLICTS="$stub_conflicts" \
+    -e SEED_HUB_MARKER="$seed_hub_marker" \
     "$IMAGE" bash -s
 }
 
 install_run() {
-  in_workspace <<'SH'
+  in_workspace "${1:-}" <<'SH'
 set -e
 # Reproduce what `coder dotfiles` does: clone into Coder's global config dir.
 mkdir -p ~/.config/coderv2
@@ -272,8 +286,16 @@ nvim --headless \
 echo "colorscheme=$(cat /tmp/nvim-colors 2>/dev/null || echo unknown)"
 echo "spec_checkout=$([ -d ~/.claude/spec-base-local/checkout/.git ] && echo present || echo absent)"
 echo "spec_hub=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.env.HOME + "/.claude/spec-base-local/config.json", "utf8")).hub)' 2>/dev/null || echo none)"
-# The last line, not the whole file: the log persists on the volume across runs.
+# The last line, not the whole file: install_run truncates this log at the top
+# of each run, so today it only ever holds this run's own invocation(s) -- tail
+# -1 just keeps this robust if that ever changes to hold more than one line.
 echo "spec_argv=$(tail -1 ~/spec-base-stub.log 2>/dev/null)"
+# wc -l, not `grep -c '^' ... || echo 0`: grep -c on an empty-but-present log
+# prints "0" AND exits 1, so the `|| echo 0` fallback fires too and doubles the
+# line -- garbling this exact spot in exactly the failure case worth debugging.
+# The redirection into wc simply fails (nothing printed) if the log is missing,
+# so the fallback only ever contributes one line.
+echo "spec_clones=$(wc -l < ~/spec-base-stub.log 2>/dev/null || echo 0)"
 # Present here would mean the successful clone left its staging dir behind --
 # e.g. a `cp -r` standing in for the `mv` into place -- which a checkout=present
 # check alone would not catch, since the copy still populates the checkout fine.
@@ -320,8 +342,15 @@ assert_contains "pre-existing zshrc was backed up, not clobbered" "backups=1" "$
 assert_contains "install.sh does not modify the dotfiles clone" "repo_status_delta=0" "$FIRST"
 assert_contains "the hub is pinned to hosted" "spec_hub=hosted" "$CHECKS"
 # A normal start must never run the networked update: it fetches and merges
-# origin/main, which is upgrade-only work in this repo.
-assert_contains "a normal start links only" "spec_argv=install" "$CHECKS"
+# origin/main, which is upgrade-only work in this repo. Anchored on the
+# trailing newline the next echo produces, not a bare substring match: without
+# it "install --anything" would also read as a pass.
+assert_contains "a normal start links only" $'spec_argv=install\n' "$CHECKS"
+# Anchored the same way as the restart's equivalent check below: a plain
+# substring match on "spec_clones=1" also matches 10-19 and 100-199, which is
+# exactly the window a step that looped the launcher once per link (instead of
+# once per start) would land in.
+assert_contains "the launcher ran once on a fresh install" $'spec_clones=1\n' "$CHECKS"
 assert_contains "the spec-base checkout is cloned, and a leftover temp dir does not block it" \
   "spec_checkout=present" "$CHECKS"
 assert_contains "the clone's staging dir does not survive a successful install" \
@@ -336,7 +365,7 @@ echo "=== second install (new container, same home: simulates restart) ==="
 # this doesn't disturb them. A fourth container run just for this would cost
 # another minute-plus; nothing this run already asserts (spec_argv, the
 # invocation count, the hub) is sensitive to what the report's counts are.
-SECOND="$(STUB_CONFLICTS=1 SEED_HUB_MARKER=1 install_run 2>&1)" || { echo "$SECOND"; echo "second install failed"; exit 1; }
+SECOND="$(install_run restart 2>&1)" || { echo "$SECOND"; echo "second install failed"; exit 1; }
 echo "$SECOND" | tail -20
 
 echo
@@ -359,7 +388,7 @@ echo "backups=$(find ~ -maxdepth 1 -name '*.pre-dotfiles*' | wc -l)"
 echo "bashrc_blocks=$(grep -cF '# >>> dotfiles: coder git identity >>>' ~/.bashrc)"
 echo "profile_blocks=$(grep -cF '# >>> dotfiles: coder git identity >>>' ~/.profile)"
 echo "spec_argv=$(tail -1 ~/spec-base-stub.log 2>/dev/null)"
-echo "spec_clones=$(grep -c '^' ~/spec-base-stub.log 2>/dev/null || echo 0)"
+echo "spec_clones=$(wc -l < ~/spec-base-stub.log 2>/dev/null || echo 0)"
 echo "spec_hub=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.env.HOME + "/.claude/spec-base-local/config.json", "utf8")).hub)' 2>/dev/null || echo none)"
 # Restore the pin the seeding step above overwrote. Without this, the
 # custom-marker value would persist on the volume and, under --keep, corrupt
@@ -383,17 +412,26 @@ assert_contains "nvim config symlink survived the restart" \
 assert_contains "no duplicate backup on restart" "backups=1" "$AFTER"
 assert_contains "no duplicate bashrc block" "bashrc_blocks=1" "$AFTER"
 assert_contains "no duplicate profile block" "profile_blocks=1" "$AFTER"
-assert_contains "the restart re-links" "spec_argv=install" "$AFTER"
+assert_contains "the restart re-links" $'spec_argv=install\n' "$AFTER"
 # Truncated at the top of each install_run, so this counts invocations within the
 # restart alone: exactly one. Catches a step that calls the launcher twice per
-# start, and unlike a cumulative count it holds under --keep too.
-assert_contains "the launcher ran once per start" "spec_clones=1" "$AFTER"
+# start, and unlike a cumulative count it holds under --keep too. Anchored on
+# the trailing newline: a bare substring match on "spec_clones=1" also matches
+# 10-19 and 100-199, which is exactly the window a step that looped the
+# launcher once per link (instead of once per start) would land in.
+assert_contains "the launcher ran once per start" $'spec_clones=1\n' "$AFTER"
 # The seeded value from install_run's heredoc, not "hosted": proves config.json
 # is left alone on a restart, rather than merely happening to still say hosted
 # (see the comment at the seeding site for why the latter would not distinguish
 # "not rewritten" from "rewritten identically").
 assert_contains "an existing config.json is not overwritten by the restart" \
   "spec_hub=custom-marker" "$AFTER"
+# Closes the loop on the restore two lines up in the heredoc: without this,
+# a restore that fails (read-only or full volume) still prints "all checks
+# passed", with the failure visible only to a human reading the dump on an
+# otherwise-green run -- which nobody does.
+assert_not_contains "the hub pin is restored for the next --keep run" \
+  "spec_hub_restore_failed=1" "$AFTER"
 
 echo
 echo "=== third install (unreachable spec-base repo, isolated claude dir) ==="
@@ -404,6 +442,19 @@ assert_contains "install.sh finishes when the spec-base repo is unreachable" \
   "==> dotfiles: done" "$NOCREDS"
 assert_contains "an unreachable spec-base repo warns instead of aborting" \
   "spec-base: clone failed" "$NOCREDS"
+# Positive control for "the spec-base checkout is not re-cloned" above: that
+# assertion greps $SECOND for the same "spec-base: cloning" text, and the only
+# other place that string exists in the whole suite is the `info` line at
+# 99-spec-base-setup.sh's clone site. Reword that line with nothing else
+# checking for it, and the not-re-cloned assertion would pass forever with
+# nothing flagging that it had gone vacuous. Asserting it here instead of
+# against $FIRST: $FIRST is not a mode-independent place to always find a
+# clone attempt (under --keep, a persisted checkout means the first install
+# legitimately does not clone either), but nocreds_run's isolated
+# CLAUDE_CONFIG_DIR lives in the container filesystem, not the volume, so it
+# starts empty every time and always reaches the clone path.
+assert_contains "the clone path announces itself (positive control for the not-re-cloned check above)" \
+  "spec-base: cloning" "$NOCREDS"
 # git cleans up its own failed clone of a path that never existed, so this only
 # proves the isolated config dir was left with no checkout at all -- not that a
 # partially-written one gets cleaned up. The next assertion covers that case.
