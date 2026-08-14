@@ -17,10 +17,11 @@ One-time, per workspace:
 coder update <workspace> --parameter dotfiles_uri=https://github.com/rgarber11/dotfiles
 ```
 
-`dotup` inside the workspace re-resolves the latest Neovim, difftastic and
-fastfetch, pulls the zsh plugins, runs `herdr update`, and updates spec-base
-(see below). Nothing else touches the network on a workspace start, except the
-one-time spec-base clone below.
+`dotup` inside the workspace re-resolves the latest Neovim, difftastic,
+fastfetch and chafa, pulls the zsh plugins, runs `herdr update`, and updates
+spec-base (see below). Every start otherwise touches the network only for apt
+to top up whatever `/usr` lost on restart, and for the spec-base clone below
+until it succeeds once.
 
 The `dsp-base` image ships a zsh setup of its own — powerlevel10k, the same five
 plugins, and copies of `shared/zsh/{options,functions}.zsh` — sourced from
@@ -42,16 +43,15 @@ workspace is a k8s pod with no podman or docker, so the local hub cannot run
 there.
 
 The clone gets one attempt and does not wait, which is why the step is
-numbered last: the git credentials come from Coder's external auth via a
-startup script that runs independently of this one. It clones into a staging
-directory and moves that into place only on success, so a failed or
-interrupted clone never leaves a half-built tree at the real checkout path to
-be mistaken for an installed one — it just warns, and the next workspace start
-retries. (Something other than a git checkout already sitting at that path is
-left alone the same way — the step warns instead of deleting it, and moving it
-aside by hand is what lets the next start pick it up.) `dotup` (or
-`/spec-base-update` inside a session) is what fast-forwards the branch and
-merges `origin/main` for coworkers' viewer fixes; a normal start never does.
+numbered last: git credentials come from Coder's external auth via an
+independent startup script, and node 22+ is required — the image has it,
+noble does not. It clones into a staging directory and moves that into place
+only on success: the only installed-check is whether the checkout path
+exists, so a half-built tree there would read as installed forever. A failed
+or interrupted clone just warns, and the next start retries. `dotup` (or
+`/spec-base-update` in a session) fast-forwards the branch and merges
+`origin/main`, keeping the launcher, skill and commands current; a normal
+start never does.
 
 ## Testing
 
