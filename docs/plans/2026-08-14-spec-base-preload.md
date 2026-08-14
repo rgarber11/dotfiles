@@ -590,6 +590,50 @@ git add tests/run.sh
 git commit -m "test: assert the spec-base layer survives a restart without re-cloning"
 ```
 
+#### Shipped: review-driven deviations from the code above
+
+1. **`assert_contains "spec_hub=hosted" "$AFTER"` could not fail.** The step only
+   ever writes `{"hub": "hosted"}`, so "not rewritten" and "rewritten identically"
+   are indistinguishable — make the write unconditional and the assertion stays
+   green. Shipped: the restart seeds `config.json` with `custom-marker` (a value the
+   production path can never produce) and asserts *that* survives, which does go red
+   under the unconditional-write mutation. The seed is driven by a positional
+   `install_run restart` argument rather than an env var, because an exported
+   `SEED_HUB_MARKER` in a developer's shell would seed the wrong call *and* disable
+   the self-heal below — they share one `if`/`elif`.
+2. **The marker self-heals.** An aborted run (Ctrl-C, a genuine second-install
+   failure) would otherwise leave `custom-marker` on the volume, and the next
+   `--keep` run would fail `spec_hub=hosted` with nothing pointing at the cause. The
+   next install now removes a `config.json` that literally contains the marker —
+   and only that, so a real hand-written config is never destroyed.
+3. **Every new assertion is newline-anchored.** `assert_contains` is a plain
+   substring glob, so `spec_clones=1` also matched `13` and `100` — and "the
+   launcher loops once per link instead of once per start" lands squarely in that
+   window. Anchoring on the trailing newline follows the precedent the `greeting=`
+   assertion already set in this harness. Demonstrated: the unanchored form passes a
+   faked 13-line log, the anchored form fails it.
+4. **`assert_not_contains "spec-base: cloning"` gained a positive control.** That
+   string exists in exactly two places — the assertion and the step's `info` line —
+   so rewording the log line would leave the check vacuously green forever. A
+   companion assertion requires the string to appear in `$NOCREDS`, where the clone
+   path is always reached (its `CLAUDE_CONFIG_DIR` lives in the container
+   filesystem, not the volume, so it is empty in every mode). Demonstrated by
+   renaming the log line: the control fails, the original stayed green.
+5. **A failed restore now fails the suite**, rather than printing a marker only a
+   human reading a green run's dump would notice.
+6. **The per-start invocation count is asserted on both starts**, not just the
+   restart, and `wc -l` replaced `grep -c '^' || echo 0` — `grep -c` prints `0` *and*
+   exits 1 on an empty file, so the fallback double-printed and garbled the output
+   in exactly the failure case worth debugging.
+
+Recorded, not done: a simpler `assert_not_contains "spec-base: pinned the hosted hub"
+"$SECOND"` would have tested the same guard with no volume mutation at all, since the
+step prints that line only on the write path. Asserting on state rather than log text
+is more durable, so the shipped version stands — but it is the cheaper shape if this
+is ever revisited. Also recorded: `tests/run.sh`'s fixture builder (a Node stub inside
+a nested heredoc) is the part that most wants extracting to `tests/fixtures/`, and the
+`--upgrade` path is what will force it.
+
 ---
 
 ### Task 5: Docs
