@@ -33,6 +33,7 @@ in_workspace() {
     -e GIT_AUTHOR_EMAIL=wrong@example.com \
     -e GIT_COMMITTER_NAME="Wrong Person" \
     -e GIT_COMMITTER_EMAIL=wrong@example.com \
+    -e STUB_CONFLICTS="${STUB_CONFLICTS:-0}" \
     "$IMAGE" bash -s
 }
 
@@ -51,6 +52,13 @@ cp -r /repo ~/.config/coderv2/dotfiles
 # Rebuilt every run, not just when missing: --keep persists this fixture on the
 # volume across separate ./tests/run.sh invocations, so a stale build would
 # silently keep testing an old stub after editing it.
+#
+# Note for whoever automates the UPGRADE=1 path later: rebuilding gives the
+# fixture a fresh, unrelated root commit each run, so a `git fetch && merge`
+# against it (what `update` does) would fail with "refusing to merge unrelated
+# histories". Nothing here exercises that today -- the existing checkout's
+# objects from an earlier run stay resolvable -- but it will bite the first
+# `--upgrade` test against this fixture.
 FIXTURE=~/.cache/spec-base-fixture
 rm -rf "$FIXTURE"
 mkdir -p "$FIXTURE/packages/spec-base-local/bin"
@@ -65,11 +73,17 @@ const cmd = process.argv[2];
 if (cmd !== 'install' && cmd !== 'update') {
   process.exit(2);
 }
+// Exercises both arms of the step's conflict-path mapper: a bare string (the
+// shape a hand-rolled report or a future launcher revision might use) and the
+// {link, reason} object the real launcher actually emits.
+const conflicts = process.env.STUB_CONFLICTS === '1'
+  ? ['commands/spec-base.md', { link: 'skills/spec-base-local', reason: 'not a symlink' }]
+  : [];
 const install = {
-  linked: ['skills/spec-base-local'],
+  linked: conflicts.length ? [] : ['skills/spec-base-local'],
   relinked: [],
   alreadyCorrect: [],
-  conflicts: [],
+  conflicts,
 };
 // cmdInstall spreads install()'s fields at the top level; cmdUpdate nests them
 // under "install". No assertion in this suite drives the update path yet --
@@ -273,13 +287,21 @@ assert_contains "the hub is pinned to hosted" "spec_hub=hosted" "$CHECKS"
 # A normal start must never run the networked update: it fetches and merges
 # origin/main, which is upgrade-only work in this repo.
 assert_contains "a normal start links only" "spec_argv=install" "$CHECKS"
-assert_contains "a leftover temp dir does not block a good clone" "spec_checkout=present" "$CHECKS"
+assert_contains "the spec-base checkout is cloned, and a leftover temp dir does not block it" \
+  "spec_checkout=present" "$CHECKS"
 assert_contains "the clone's staging dir does not survive a successful install" \
   "spec_tmp=absent" "$CHECKS"
 
 echo
 echo "=== second install (new container, same home: simulates restart) ==="
-SECOND="$(install_run 2>&1)" || { echo "$SECOND"; echo "second install failed"; exit 1; }
+# STUB_CONFLICTS=1 only on this run: it drives the stub to report two
+# conflicting links (one bare string, one {link, reason} object) so the warn
+# path that names them gets exercised somewhere -- the first install's
+# assertions above are all keyed off the default (no-conflicts) report, so
+# this doesn't disturb them. A fourth container run just for this would cost
+# another minute-plus; nothing this run already asserts (spec_argv, the
+# invocation count, the hub) is sensitive to what the report's counts are.
+SECOND="$(STUB_CONFLICTS=1 install_run 2>&1)" || { echo "$SECOND"; echo "second install failed"; exit 1; }
 echo "$SECOND" | tail -20
 
 echo
@@ -289,6 +311,8 @@ assert_not_contains "difftastic not re-downloaded" "downloading difft"     "$SEC
 assert_not_contains "fastfetch not re-downloaded" "downloading fastfetch" "$SECOND"
 assert_not_contains "herdr not reinstalled"       "installing herdr"      "$SECOND"
 assert_contains "install.sh does not modify the dotfiles clone (restart)" "repo_status_delta=0" "$SECOND"
+assert_contains "conflicting links are named, not just counted" \
+  "commands/spec-base.md skills/spec-base-local" "$SECOND"
 
 AFTER="$(in_workspace <<'SH'
 export PATH="$HOME/.local/bin:$PATH"

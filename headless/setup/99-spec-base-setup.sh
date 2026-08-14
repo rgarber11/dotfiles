@@ -144,7 +144,12 @@ else
         const i = r.install ?? r;
         const n = (a) => (a ?? []).length;
         console.log(`${n(i.linked)} ${n(i.relinked)} ${n(i.alreadyCorrect)} ${n(i.conflicts)}`);
-        console.log((i.conflicts ?? []).map((c) => c.link ?? c).join(" "));
+        // String.prototype.link is a legacy Annex B method every string
+        // already has, so a bare-string conflict entry has a non-nullish
+        // .link (a function) and "??" never falls through to it -- hence the
+        // typeof guard instead of a plain "c.link ?? c".
+        const p = (c) => (c && typeof c === "object" ? (c.link ?? JSON.stringify(c)) : String(c));
+        console.log((i.conflicts ?? []).map(p).join(" "));
       ' <<<"$spec_base_report" 2>/dev/null)" || spec_base_output=""
       if [ -n "$spec_base_output" ]; then
         # mapfile, not a `... | tail -1` pipeline: under `set -o pipefail` a
@@ -152,10 +157,18 @@ else
         # abort the install. mapfile always returns 0, even reading a single
         # line or an empty here-string.
         mapfile -t spec_base_lines <<<"$spec_base_output"
-        spec_base_counts="${spec_base_lines[0]}"
+        # Guarded like [1] just below even though a non-empty $spec_base_output
+        # always yields at least one element: the guarantee lives five lines
+        # away, and an empty array here would be a set -u abort, not a fallback.
+        spec_base_counts="${spec_base_lines[0]:-}"
         spec_base_conflicts="${spec_base_lines[1]:-}"
         read -r spec_base_new spec_base_re spec_base_ok spec_base_bad <<<"$spec_base_counts"
-        if [ "$spec_base_new" = 0 ] && [ "$spec_base_re" = 0 ]; then
+        if [ "$spec_base_new" = 0 ] && [ "$spec_base_re" = 0 ] && [ "$spec_base_ok" = 0 ] && [ "$spec_base_bad" = 0 ]; then
+          # Every count zero means the launcher linked nothing at all, not that
+          # a healthy restart found nothing new -- worth a warn, not the same
+          # info line a restart with N already-correct links would print.
+          warn "spec-base: linked nothing at all; the local review layer is not installed"
+        elif [ "$spec_base_new" = 0 ] && [ "$spec_base_re" = 0 ]; then
           info "spec-base: $spec_base_ok links already correct"
         else
           info "spec-base: linked $spec_base_new, relinked $spec_base_re, already correct $spec_base_ok"
@@ -167,7 +180,7 @@ else
         info "spec-base: ${spec_base_cmd[0]} finished"
       fi
     else
-      warn "spec-base: ${spec_base_cmd[0]} failed; re-run \`node $spec_base_launcher install\` for the error"
+      warn "spec-base: ${spec_base_cmd[0]} failed; re-run \`node $spec_base_launcher install\` (the offline link step) for the error"
     fi
   fi
 fi
