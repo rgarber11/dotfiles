@@ -84,14 +84,24 @@ SH
 # credentials are not written yet: the clone must fail, warn, and leave nothing
 # behind -- and install.sh must still finish, or a boot with no credentials would
 # leave the workspace with no shell.
+#
+# Depends on install_run having already copied the repo onto the volume as
+# ~/.config/coderv2/dotfiles -- this only invokes install.sh from there, so it
+# cannot run standalone against a fresh volume.
 nocreds_run() {
   in_workspace <<'SH'
 set -e
 export CLAUDE_CONFIG_DIR=/tmp/claude-nocreds
 export SPEC_BASE_REPO=/nonexistent/spec-base.git
 export SPEC_BASE_BRANCH=main
+# Simulate a clone killed partway through on an earlier start: the leftover temp
+# directory must be cleared, not adopted. Without the rm -rf around the clone
+# this junk would survive.
+mkdir -p /tmp/claude-nocreds/spec-base-local/.checkout.tmp/.git
+echo junk > /tmp/claude-nocreds/spec-base-local/.checkout.tmp/junk
 ~/.config/coderv2/dotfiles/install.sh
 echo "nocreds_checkout=$([ -d /tmp/claude-nocreds/spec-base-local/checkout ] && echo present || echo absent)"
+echo "nocreds_tmp=$([ -e /tmp/claude-nocreds/spec-base-local/.checkout.tmp ] && echo present || echo absent)"
 SH
 }
 
@@ -245,9 +255,12 @@ assert_contains "install.sh finishes when the spec-base repo is unreachable" \
   "==> dotfiles: done" "$NOCREDS"
 assert_contains "an unreachable spec-base repo warns instead of aborting" \
   "spec-base: clone failed" "$NOCREDS"
-# A partial checkout would satisfy the "does it exist" idempotence check forever,
-# so a failed clone must leave the directory absent, not merely broken.
+# git cleans up its own failed clone of a path that never existed, so this only
+# proves the isolated config dir was left with no checkout at all -- not that a
+# partially-written one gets cleaned up. The next assertion covers that case.
 assert_contains "a failed clone leaves no checkout behind" \
   "nocreds_checkout=absent" "$NOCREDS"
+assert_contains "a leftover partial clone is cleared, not adopted" \
+  "nocreds_tmp=absent" "$NOCREDS"
 
 summary
