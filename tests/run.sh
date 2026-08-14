@@ -142,8 +142,21 @@ chmod +x ~/.config/coderv2/dotfiles/install.sh
 # hosted -> hosted anyway" -- the fixture's install.sh only ever writes
 # "hosted", so asserting spec_hub=hosted after a restart alone would pass
 # either way.
-if [ "$SEED_HUB_MARKER" = 1 ] && [ -e ~/.claude/spec-base-local/config.json ]; then
-  printf '{\n  "hub": "custom-marker"\n}\n' > ~/.claude/spec-base-local/config.json
+if [ "$SEED_HUB_MARKER" = 1 ]; then
+  if [ -e ~/.claude/spec-base-local/config.json ]; then
+    printf '{\n  "hub": "custom-marker"\n}\n' > ~/.claude/spec-base-local/config.json
+  fi
+# Self-heals a stale marker on any non-restart call (the normal fresh-volume
+# path, and a --keep invocation's first install alike). The AFTER probe below
+# restores "hosted" on the happy path, but a genuine second-install failure,
+# Ctrl-C, or a read-only/full volume failing that restore would otherwise
+# leave the marker on the volume with nothing pointing at it -- the next
+# --keep run would just fail "hub is pinned to hosted" with no clue why.
+# Precise on purpose: only ever removes a config.json that literally holds our
+# marker, so it can never touch a config.json a real run wrote.
+elif [ -e ~/.claude/spec-base-local/config.json ] && \
+     grep -qF '"custom-marker"' ~/.claude/spec-base-local/config.json; then
+  rm -f ~/.claude/spec-base-local/config.json
 fi
 ~/.config/coderv2/dotfiles/install.sh
 REPO_STATUS_AFTER="$(git -C ~/.config/coderv2/dotfiles status --porcelain -uno | wc -l)"
@@ -352,8 +365,12 @@ echo "spec_hub=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(proc
 # custom-marker value would persist on the volume and, under --keep, corrupt
 # the *next* invocation's fresh-install assertion that the hub is pinned to
 # hosted (that install_run would see config.json already present and, quite
-# correctly, leave the leftover marker alone).
-printf '{\n  "hub": "hosted"\n}\n' > ~/.claude/spec-base-local/config.json 2>/dev/null || true
+# correctly, leave the leftover marker alone). install_run's own self-heal is
+# the backstop if this fails outright; this line still has to say so rather
+# than swallow it, or a read-only/full volume leaves no signal at all.
+if ! printf '{\n  "hub": "hosted"\n}\n' > ~/.claude/spec-base-local/config.json 2>/dev/null; then
+  echo "spec_hub_restore_failed=1"
+fi
 SH
 )"
 echo "$AFTER"
