@@ -41,9 +41,11 @@ fi
 
 if [ "$spec_base_node" != 1 ]; then
   warn "spec-base: node 22+ not found; skipping the local review layer"
+elif ! mkdir -p "$spec_base_root"; then
+  # A mid-file `set -e` abort never reaches the trailing `:` at the bottom, so
+  # this has to be its own guard rather than relying on that to save it.
+  warn "spec-base: cannot create $spec_base_root; skipping the local review layer"
 else
-  mkdir -p "$spec_base_root"
-
   # Written only when absent: a file that already exists was written by hand, and
   # silently overwriting a deliberate choice is worse than saying it cannot work.
   if [ ! -e "$spec_base_root/config.json" ]; then
@@ -72,6 +74,12 @@ else
     esac
   fi
 
+  # rmdir refuses a non-empty directory, so this recovers from an interrupted
+  # teardown or a stray mkdir without being able to delete anything real.
+  if [ -d "$spec_base_checkout" ]; then
+    rmdir "$spec_base_checkout" 2>/dev/null || true
+  fi
+
   # -e, not -d .git: a worktree-style checkout keeps `.git` as a regular file, and
   # reading that as "not installed" would delete a working tree below.
   if [ ! -e "$spec_base_checkout" ]; then
@@ -89,7 +97,8 @@ else
     rm -rf "$spec_base_tmp"
     if GIT_TERMINAL_PROMPT=0 git clone --quiet --branch "$SPEC_BASE_BRANCH" \
          "$SPEC_BASE_REPO" "$spec_base_tmp"; then
-      mv "$spec_base_tmp" "$spec_base_checkout"
+      mv "$spec_base_tmp" "$spec_base_checkout" ||
+        warn "spec-base: could not move the clone into place; retrying next start"
     else
       rm -rf "$spec_base_tmp"
       warn "spec-base: clone failed (git credentials not written yet?); retrying next start"
@@ -97,12 +106,11 @@ else
   elif [ ! -e "$spec_base_checkout/.git" ]; then
     # Something that is not a clone is sitting in the way. Deleting it is not
     # ours to do, and saying nothing would look like a successful install.
-    warn "spec-base: $spec_base_checkout exists but is not a git checkout; leaving it alone"
+    warn "spec-base: $spec_base_checkout exists but is not a git checkout; move it aside or delete it, then re-run"
   fi
 fi
 
-# install.sh sources this file and `set -e`s on a nonzero exit from the last
-# command run, not just a failing command anywhere in it. Every branch above
-# happens to end in 0, but that's fragile against Task 3 appending more to this
-# file -- so make the exit status structural instead of accidental.
+# A failing command anywhere in this file aborts install.sh under `set -e`;
+# separately, `source` returns the status of the last command run -- so keep a
+# `:` last, or a branch that ends in a false test would abort the install.
 :
