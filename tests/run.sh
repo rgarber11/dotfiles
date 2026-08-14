@@ -94,6 +94,11 @@ echo "difft=$(command -v difft || echo none)"
 # the ~/.local build wins on PATH and that it actually has the feature.
 echo "chafa=$(command -v chafa || echo none)"
 echo "chafa_probe=$(chafa --help 2>/dev/null | grep -c -- --probe || echo 0)"
+# Not just "is node present" -- noble's apt nodejs is 18.19, the whole reason
+# the Containerfile installs from nodesource instead. Assert the version, not
+# just presence, so a nodesource install that silently fell back to noble's
+# package (see the Containerfile's build-time guard) would still be caught here.
+echo "node=$(node --version)"
 # --help is handled in the arg loop before fasterfetch checks for fastfetch and
 # chafa, so this exercises the symlink, the exec bit and that the script parses,
 # without needing a tty for its terminal probe.
@@ -152,6 +157,7 @@ assert_contains "nvim is under ~/.local"  "nvim=/home/coder/.local/bin/nvim" "$C
 assert_contains "chafa is the ~/.local build, not noble's 1.14" \
   "chafa=/home/coder/.local/bin/chafa" "$CHECKS"
 assert_not_contains "chafa supports --probe" "chafa_probe=0" "$CHECKS"
+assert_contains "node is nodesource 24, not noble's 18.19" "node=v24." "$CHECKS"
 assert_contains "fasterfetch is linked into ~/.local/bin" \
   "fasterfetch=/home/coder/.local/bin/fasterfetch" "$CHECKS"
 assert_contains "fasterfetch runs" "fasterfetch_help=ok" "$CHECKS"
