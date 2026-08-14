@@ -123,8 +123,13 @@ Flow:
    means a real file is sitting where a symlink belongs, so the layer is partly
    broken, and a bare count leaves the user to go find which of six links failed.
 5. **`--upgrade` only.** `node "$LAUNCHER" update --hosted --repo "$REPO" --branch "$BRANCH"`,
-   which fast-forwards the fork branch, merges `origin/main` for coworkers' hub
-   and viewer fixes, and relinks. Never on a normal start: that matches
+   which fast-forwards the fork branch, merges `origin/main`, and relinks. What
+   that merge refreshes is the **launcher, skill and commands** — not the viewer.
+   Worth stating precisely, because the plan originally said "coworkers' hub and
+   viewer fixes" and that is wrong for a hosted-pinned workspace: `hub.mjs` builds
+   session URLs from the hosted `baseUrl`, so janice serves the viewer, and
+   `cmdUpdate`'s image-pull branch is gated on `mode === 'local'`, which this step
+   never is. Never on a normal start: that matches
    `--upgrade`'s documented "never runs automatically" and keeps ordinary boots
    off the network. `/spec-base-update` inside a session remains the other way to
    do it.

@@ -669,7 +669,8 @@ last: the git credentials come from Coder's external auth via a startup script
 that runs independently of this one. If they are not written yet the clone
 fails, warns, leaves nothing behind, and the next workspace start picks it up.
 `dotup` (or `/spec-base-update` inside a session) is what fast-forwards the
-branch and merges `origin/main` for coworkers' viewer fixes; a normal start
+branch and merges `origin/main` for coworkers' launcher and skill fixes — not the
+viewer, which janice serves in hosted mode; a normal start
 never does.
 ```
 
