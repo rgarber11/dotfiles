@@ -79,6 +79,22 @@ echo "shell=$(getent passwd "$(id -un)" | cut -d: -f7)"
 SH
 }
 
+# A third install run, isolated by CLAUDE_CONFIG_DIR, with a repo that cannot
+# exist. This is the harness's only way to reproduce a fresh workspace whose git
+# credentials are not written yet: the clone must fail, warn, and leave nothing
+# behind -- and install.sh must still finish, or a boot with no credentials would
+# leave the workspace with no shell.
+nocreds_run() {
+  in_workspace <<'SH'
+set -e
+export CLAUDE_CONFIG_DIR=/tmp/claude-nocreds
+export SPEC_BASE_REPO=/nonexistent/spec-base.git
+export SPEC_BASE_BRANCH=main
+~/.config/coderv2/dotfiles/install.sh
+echo "nocreds_checkout=$([ -d /tmp/claude-nocreds/spec-base-local/checkout ] && echo present || echo absent)"
+SH
+}
+
 echo "=== first install (fresh home) ==="
 FIRST="$(install_run 2>&1)" || { echo "$FIRST"; echo "install failed"; exit 1; }
 echo "$FIRST" | tail -20
@@ -219,5 +235,19 @@ assert_contains "nvim config symlink survived the restart" \
 assert_contains "no duplicate backup on restart" "backups=1" "$AFTER"
 assert_contains "no duplicate bashrc block" "bashrc_blocks=1" "$AFTER"
 assert_contains "no duplicate profile block" "profile_blocks=1" "$AFTER"
+
+echo
+echo "=== third install (unreachable spec-base repo, isolated claude dir) ==="
+NOCREDS="$(nocreds_run 2>&1)" || { echo "$NOCREDS"; echo "install failed without spec-base credentials"; exit 1; }
+echo "$NOCREDS" | tail -20
+
+assert_contains "install.sh finishes when the spec-base repo is unreachable" \
+  "==> dotfiles: done" "$NOCREDS"
+assert_contains "an unreachable spec-base repo warns instead of aborting" \
+  "spec-base: clone failed" "$NOCREDS"
+# A partial checkout would satisfy the "does it exist" idempotence check forever,
+# so a failed clone must leave the directory absent, not merely broken.
+assert_contains "a failed clone leaves no checkout behind" \
+  "nocreds_checkout=absent" "$NOCREDS"
 
 summary
