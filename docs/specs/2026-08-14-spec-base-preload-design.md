@@ -56,17 +56,31 @@ credentials, but running last gives that script the longest head start within th
 dotfiles run, which is the cheapest thing that improves the odds on a fresh
 workspace.
 
-Tunables at the top, so the branch is a one-line change when the fork merges to
-main:
+Tunables at the top, env-overridable:
 
 ```sh
-REPO="${SPEC_BASE_REPO:-https://github.com/PhoeniciaLabsOrg/spec-base.git}"
-BRANCH="${SPEC_BASE_BRANCH:-rgarber/feat/local-questioning}"
-ROOT="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/spec-base-local"
-LAUNCHER="$ROOT/checkout/packages/spec-base-local/bin/spec-base-local.mjs"
+SPEC_BASE_REPO="${SPEC_BASE_REPO:-https://github.com/PhoeniciaLabsOrg/spec-base.git}"
+SPEC_BASE_BRANCH="${SPEC_BASE_BRANCH:-rgarber/feat/local-questioning}"
+spec_base_root="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/spec-base-local"
+spec_base_launcher="$spec_base_root/checkout/packages/spec-base-local/bin/spec-base-local.mjs"
 ```
 
-`ROOT` derives from `CLAUDE_CONFIG_DIR` with the same precedence
+The names are prefixed, and split by case, because this file is **sourced** into
+`install.sh`'s shell: uppercase marks an env-overridable tunable, lowercase an
+internal derived value, and both are namespaced so they cannot collide with
+`install.sh` or another step.
+
+**`SPEC_BASE_BRANCH` governs new clones only** — worth stating plainly, because an
+earlier draft of this design claimed it made the branch "a one-line change when the
+fork merges to main", and that is false on any workspace that has already cloned.
+The step consults it only on the clone path, and the launcher's `pullOwnBranch()`
+pulls whatever branch the checkout is already on, while `cmdUpdate`'s `--branch` is
+read only when `.git` is missing. So on an existing PVC the checkout stays on
+`rgarber/feat/local-questioning` until someone moves it by hand. When the fork does
+merge, the follow-up worth having is a warn when the checkout's branch differs from
+`SPEC_BASE_BRANCH`, which is the state that will actually occur.
+
+`spec_base_root` derives from `CLAUDE_CONFIG_DIR` with the same precedence
 `config.mjs:claudeDir()` uses, so the installer and the launcher can never
 disagree about where things live. It is also what makes the failure-path test
 below isolatable.
@@ -81,7 +95,7 @@ Flow:
 1. **Node guard.** `node` on `PATH` and major ≥ 22, else `warn` and do nothing.
    The image is 24, so this only fires if the headless profile is run on a
    thinner box.
-2. **Pin hosted mode.** Write `$ROOT/config.json` as `{"hub": "hosted"}` **only
+2. **Pin hosted mode.** Write `$spec_base_root/config.json` as `{"hub": "hosted"}` **only
    if the file is absent**. There is no container runtime in the pod, so local
    mode cannot work; but a file that already exists was written by hand, so it is
    left alone — and a `warn` if it says `local`, because that configuration
@@ -108,7 +122,7 @@ Flow:
    a broken tree forever. An empty directory at the path is `rmdir`-ed first, which
    can only ever succeed on an empty one; anything else there gets a warn naming
    the remedy, not a deletion.
-4. **Link.** `node "$LAUNCHER" install` — the launcher's link-only subcommand
+4. **Link.** `node "$spec_base_launcher" install` — the launcher's link-only subcommand
    (`requireGit: false`, no hub needed, no network). It relinks
    `~/.claude/skills/spec-base-local` and the five `~/.claude/commands/spec-base*.md`,
    which is what makes this idempotent across restarts. Its JSON report is parsed
@@ -122,7 +136,7 @@ Flow:
    array becomes a `warn` **naming the paths**, not just counting them: a conflict
    means a real file is sitting where a symlink belongs, so the layer is partly
    broken, and a bare count leaves the user to go find which of six links failed.
-5. **`--upgrade` only.** `node "$LAUNCHER" update --hosted --repo "$REPO" --branch "$BRANCH"`,
+5. **`--upgrade` only.** `node "$spec_base_launcher" update --hosted …`,
    which fast-forwards the fork branch, merges `origin/main`, and relinks. What
    that merge refreshes is the **launcher, skill and commands** — not the viewer.
    Worth stating precisely, because the plan originally said "coworkers' hub and
@@ -174,14 +188,14 @@ step's wiring is right and that its failure path is safe.
 
    Be honest about what that boundary costs: the suite asserts **invocation, never
    outcome**. A launcher whose `install` silently no-ops passes everything here, so
-   nothing automated proves a single symlink appears — the manual `ls -l` in §3's
+   nothing automated proves a single symlink appears — the manual `ls -l` in the plan's Task 6 Step 4
    checklist is the only check of that, and it must stay a named manual step rather
    than quietly reading as covered.
 
    The stub can emit the nested `update` report shape and rejects an unrecognised
    subcommand, so the parser's `report.install ?? report` line and our flag spelling
    are *available* to cover — but no assertion drives the `update` path yet, so today
-   that branch is verified by hand (§3's manual checklist) rather than mechanically.
+   that branch is verified by hand (the plan's Task 6 Step 5) rather than mechanically.
    The conflicts branch **is** covered, and dearly earned: it shipped uncovered for
    one round and immediately hid a real bug — `c.link` resolves to
    `String.prototype.link`, a legacy Annex B method present on every string, so the

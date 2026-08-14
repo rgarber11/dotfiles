@@ -731,7 +731,8 @@ UPGRADE=1 bash -c '
   source ~/dotfiles/headless/setup/99-spec-base-setup.sh
 '
 ```
-Expected: `spec-base: linked 0, relinked 0, already correct 6` and no warning. This
+Expected: `spec-base: 6 links already correct` and no warning. (Not the
+three-number form — Task 3's reporting amendment collapses the steady state.) This
 sources only the one step, so it exercises the `update --hosted` path without
 re-resolving every other tool's release. It does fetch and merge `origin/main`, so
 expect it to take a few seconds.

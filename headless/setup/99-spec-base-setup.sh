@@ -70,7 +70,11 @@ else
     ' "$spec_base_root/config.json" 2>/dev/null)" || spec_base_hub="unreadable"
     case "$spec_base_hub" in
       local) warn "spec-base: config.json asks for the local hub, which needs podman or docker; delete it to restore the hosted pin" ;;
-      unreadable) warn "spec-base: $spec_base_root/config.json is not readable JSON; the launcher will fail on it" ;;
+      # Not "the launcher will fail on it": the launcher's readJsonFile swallows the
+      # parse error and returns {}, so resolveHub falls back to its "local" default
+      # -- which cannot work in a pod. It degrades quietly rather than failing, so
+      # this warn is the only signal, and it has to name the remedy.
+      unreadable) warn "spec-base: $spec_base_root/config.json is not readable JSON, so the hosted pin will not apply; delete it and re-run to restore it" ;;
     esac
   fi
 
@@ -93,14 +97,20 @@ else
     # One attempt, no waiting for credentials: they come from a startup script
     # that runs independently of this one. GIT_TERMINAL_PROMPT=0 keeps a manual
     # `dotup` from stalling on a username prompt instead of failing.
+    # Both rm -rf calls are `|| true`: a leftover staging dir this user cannot
+    # delete (a PVC whose ~/.claude ownership shifted, a read-only volume) would
+    # otherwise be an unguarded non-zero and abort install.sh -- note mkdir -p on
+    # an existing root returns 0, so the guard above does not catch it. Ignoring
+    # the failure leaves the clone to fail on the non-empty directory instead,
+    # which warns and retries next start like any other clone failure.
     spec_base_tmp="$spec_base_root/.checkout.tmp"
-    rm -rf "$spec_base_tmp"
+    rm -rf "$spec_base_tmp" || true
     if GIT_TERMINAL_PROMPT=0 git clone --quiet --branch "$SPEC_BASE_BRANCH" \
          "$SPEC_BASE_REPO" "$spec_base_tmp"; then
       mv "$spec_base_tmp" "$spec_base_checkout" ||
         warn "spec-base: could not move the clone into place; retrying next start"
     else
-      rm -rf "$spec_base_tmp"
+      rm -rf "$spec_base_tmp" || true
       warn "spec-base: clone failed (git credentials not written yet?); retrying next start"
     fi
   elif [ ! -e "$spec_base_checkout/.git" ]; then
