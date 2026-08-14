@@ -28,7 +28,7 @@ else
     if [ -d "$dir/.git" ]; then
       if [ "${UPGRADE:-0}" = 1 ]; then
         info "updating $name"
-        timeout 120 git -C "$dir" pull --quiet --ff-only || warn "could not update $name"
+        timeout -k 10 120 git -C "$dir" pull --quiet --ff-only || warn "could not update $name"
       fi
     else
       # An interrupted clone leaves a directory with no .git, and git refuses to
@@ -36,13 +36,16 @@ else
       # subsequent workspace start. Nothing in there is worth keeping, so clear it.
       if [ -d "$dir" ]; then
         warn "removing incomplete $name checkout"
-        # || true: a directory this user cannot remove (an ownership shift on the
-        # PVC) would otherwise abort the install here. The clone below then fails
-        # on the non-empty directory and warns, which is the right outcome.
-        rm -rf "$dir" || true
+        # Guarded so a directory this user cannot remove (an ownership shift on
+        # the PVC) warns instead of aborting the install -- and warns rather than
+        # `|| true`, because the clone below then fails on the leftover directory
+        # and "could not clone" alone would misattribute the cause to the network.
+        rm -rf "$dir" || warn "could not remove incomplete $name checkout"
       fi
       info "cloning $name"
-      timeout 120 git clone --depth=1 --quiet "$url" "$dir" || warn "could not clone $name"
+      # -k 10: a git that ignores SIGTERM would otherwise leave the wait unbounded
+      # again, which is the whole thing the timeout is here to prevent.
+      timeout -k 10 120 git clone --depth=1 --quiet "$url" "$dir" || warn "could not clone $name"
     fi
   done
 fi

@@ -31,10 +31,11 @@ podman build -q -t "$IMAGE" -f "$HERE/Containerfile" "$HERE" >/dev/null
 # stops passing a spec-base-only knob into the three container roles that
 # ignore it (the CHECKS and AFTER probes, and nocreds_run).
 in_workspace() {
-  local stub_conflicts=0 seed_hub_marker=0
+  local stub_conflicts=0 seed_hub_marker=0 stub_trouble=0
   if [ "${1:-}" = restart ]; then
     stub_conflicts=1
     seed_hub_marker=1
+    stub_trouble=1
   fi
   # The GIT_* values mimic what the Coder agent exports. They are deliberately
   # WRONG so the identity assertions actually prove .zshenv/.bashrc beat them;
@@ -49,6 +50,7 @@ in_workspace() {
     -e GIT_COMMITTER_EMAIL=wrong@example.com \
     -e STUB_CONFLICTS="$stub_conflicts" \
     -e SEED_HUB_MARKER="$seed_hub_marker" \
+    -e STUB_TROUBLE="$stub_trouble" \
     "$IMAGE" bash -s
 }
 
@@ -113,7 +115,25 @@ const install = {
 // Task 6's manual upgrade check does -- but the stub needs to be capable of
 // both shapes so the step's `r.install ?? r` parsing has something real to be
 // tested against later.
-const report = cmd === 'update' ? { checkout: 'stub', install } : { checkout: 'stub', ...install };
+// The signals only `update` can produce. The step reads these off the report's
+// top level -- they never live under "install" -- so attaching them here is what
+// exercises its four trouble warns and the skill-drift warn. Deliberately behind
+// an explicit knob: a real `install` report would never carry them, and the point
+// is to cover the step's parsing and messages, not to imitate the launcher. The
+// alternative was a fourth container running install.sh --upgrade, which
+// re-resolves every tool in the profile over the network for one assertion.
+const trouble = process.env.STUB_TROUBLE === '1'
+  ? {
+      ownBranch: { failed: true, dirty: true },
+      upstream: { fetchFailed: true },
+      merge: { conflict: true, dirty: true },
+      drift: { files: ['skills/protocol.md', 'packages/shared/src/schemas.ts'] },
+    }
+  : {};
+const report =
+  cmd === 'update'
+    ? { checkout: 'stub', install, ...trouble }
+    : { checkout: 'stub', ...install, ...trouble };
 console.log(JSON.stringify(report));
 STUB
 git -C "$FIXTURE" init -q -b main
@@ -394,6 +414,22 @@ assert_contains "conflicting links are named with the launcher's reason" \
 # the run that would show it.
 assert_not_contains "zero correct links are never called 'already correct'" \
   "spec-base: 0 links already correct" "$SECOND"
+# The four signals only `update` reports, each its own case arm. Before these the
+# step read the link counts alone, so a dotup whose fetch died or whose merge
+# conflicted printed a cheerful "already correct" and nothing else.
+assert_contains "a failed fast-forward is reported" \
+  "could not fast-forward" "$SECOND"
+assert_contains "a dirty checkout says what was skipped" \
+  "the origin/main merge was skipped" "$SECOND"
+assert_contains "a failed fetch is reported" \
+  "could not fetch origin/main" "$SECOND"
+assert_contains "a conflicted merge is reported with where to fix it" \
+  "origin/main conflicts with" "$SECOND"
+# skillDrift exists so the skill is updated deliberately rather than silently, and
+# it only populates on a merge that succeeded -- so this is the one warn that has
+# to fire on an otherwise-successful update.
+assert_contains "upstream changes to the skill's own files are named" \
+  "changed files this skill depends on (skills/protocol.md packages/shared/src/schemas.ts)" "$SECOND"
 assert_not_contains "the spec-base checkout is not re-cloned" "spec-base: cloning" "$SECOND"
 
 AFTER="$(in_workspace <<'SH'

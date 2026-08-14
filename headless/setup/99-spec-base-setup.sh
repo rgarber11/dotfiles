@@ -104,13 +104,20 @@ else
     # the failure leaves the clone to fail on the non-empty directory instead,
     # which warns and retries next start like any other clone failure.
     spec_base_tmp="$spec_base_root/.checkout.tmp"
-    rm -rf "$spec_base_tmp" || true
-    if GIT_TERMINAL_PROMPT=0 git clone --quiet --branch "$SPEC_BASE_BRANCH" \
+    rm -rf "$spec_base_tmp" || warn "spec-base: could not clear $spec_base_tmp"
+    # timeout, because GIT_TERMINAL_PROMPT=0 closes the prompt stall but not the
+    # network one: git has no built-in timeout, and an egress that drops packets
+    # rather than resetting them makes a clone hang instead of fail. A hang here
+    # means install.sh never returns and the workspace never reports ready, so
+    # this is the one failure mode that outranks the clone not happening at all.
+    # 300s matches lib.sh's --max-time for a comparable transfer; -k 10 covers a
+    # git that ignores SIGTERM. Exit 124 lands in the existing warn branch.
+    if GIT_TERMINAL_PROMPT=0 timeout -k 10 300 git clone --quiet --branch "$SPEC_BASE_BRANCH" \
          "$SPEC_BASE_REPO" "$spec_base_tmp"; then
       mv "$spec_base_tmp" "$spec_base_checkout" ||
         warn "spec-base: could not move the clone into place; retrying next start"
     else
-      rm -rf "$spec_base_tmp" || true
+      rm -rf "$spec_base_tmp" || warn "spec-base: could not clear $spec_base_tmp"
       warn "spec-base: clone failed (git credentials not written yet?); retrying next start"
     fi
   elif [ ! -e "$spec_base_checkout/.git" ]; then
@@ -137,9 +144,18 @@ else
     # than let it drift silently. Offline: rev-parse reads .git, nothing else.
     spec_base_head="$(git -C "$spec_base_checkout" rev-parse --abbrev-ref HEAD 2>/dev/null)" ||
       spec_base_head=""
-    if [ -n "$spec_base_head" ] && [ "$spec_base_head" != "$SPEC_BASE_BRANCH" ]; then
-      warn "spec-base: the checkout is on $spec_base_head, not $SPEC_BASE_BRANCH; that only governs new clones, so switch it in $spec_base_checkout or delete it to reclone"
-    fi
+    case "$spec_base_head" in
+      ""|"$SPEC_BASE_BRANCH") ;;
+      # rev-parse --abbrev-ref prints the literal "HEAD" for a detached checkout
+      # and still exits 0, so without this arm the warn would name "HEAD" as if it
+      # were a branch. Worth its own sentence: the launcher's pullOwnBranch would
+      # go on to run `git pull --ff-only origin HEAD`, which is not what anyone
+      # means by an update.
+      HEAD)
+        warn "spec-base: $spec_base_checkout is on a detached HEAD, so an update cannot fast-forward it; check it out onto $SPEC_BASE_BRANCH or delete it to reclone" ;;
+      *)
+        warn "spec-base: the checkout is on $spec_base_head, not $SPEC_BASE_BRANCH; that only governs new clones, so switch it in $spec_base_checkout or delete it to reclone" ;;
+    esac
 
     # `install` is link-only: no network, no git repo, no hub. `update` also
     # fast-forwards this branch and merges origin/main, so it is upgrade-only --
@@ -158,7 +174,11 @@ else
     # shells out to git fetch/pull/merge, the launcher never sets it, and a
     # hand-run `dotup` in a terminal would otherwise stall on a username prompt
     # instead of failing and warning.
-    if spec_base_report="$(GIT_TERMINAL_PROMPT=0 node "$spec_base_launcher" "${spec_base_cmd[@]}")"; then
+    # Bounded for the same reason as the clone above: `update` shells out to git
+    # fetch/pull/merge, so it inherits the same hang-instead-of-fail risk, and a
+    # hang at this step blocks the whole startup script. `install` is offline and
+    # finishes in milliseconds, so the bound only ever bites the update path.
+    if spec_base_report="$(GIT_TERMINAL_PROMPT=0 timeout -k 10 300 node "$spec_base_launcher" "${spec_base_cmd[@]}")"; then
       # node -e and not jq: node is a hard requirement two lines up, jq is not
       # guaranteed anywhere. `install` spreads its counts at the top level while
       # `update` nests them under "install", so accept either.
@@ -196,6 +216,13 @@ else
         if (r.upstream?.fetchFailed) t.push("fetch-failed");
         if (r.merge?.conflict) t.push("merge-conflict");
         console.log(t.join(" "));
+        // Fourth line: the upstream files the skill depends on, when a merge
+        // changed them. skillDrift exists so the skill gets updated
+        // deliberately rather than silently, and it only populates on a merge that
+        // succeeded -- the path the tokens above stay quiet about, so staying quiet
+        // here too would defeat the whole point of it. Paths are repo-relative and
+        // space-free (they come from a fixed WATCHED list), so one line is enough.
+        console.log((r.drift?.files ?? []).join(" "));
       ' <<<"$spec_base_report" 2>/dev/null)" || spec_base_output=""
       if [ -n "$spec_base_output" ]; then
         # mapfile, not a `... | tail -1` pipeline: under `set -o pipefail` a
@@ -209,6 +236,7 @@ else
         spec_base_counts="${spec_base_lines[0]:-}"
         spec_base_conflicts="${spec_base_lines[1]:-}"
         spec_base_trouble="${spec_base_lines[2]:-}"
+        spec_base_drift="${spec_base_lines[3]:-}"
         read -r spec_base_new spec_base_re spec_base_ok spec_base_bad <<<"$spec_base_counts"
         if [ "$spec_base_new" = 0 ] && [ "$spec_base_re" = 0 ] && [ "$spec_base_ok" = 0 ] && [ "$spec_base_bad" = 0 ]; then
           # Every count zero means the launcher linked nothing at all, not that
@@ -243,13 +271,19 @@ else
               pull-failed)
                 warn "spec-base: could not fast-forward $SPEC_BASE_BRANCH; the skill and commands are the version already on disk" ;;
               dirty)
-                warn "spec-base: the checkout has uncommitted changes, so nothing was pulled or merged; commit or discard them in $spec_base_checkout" ;;
+                # Not "nothing was pulled": merge.dirty can be set on its own, when
+                # a pull succeeded and left the tree dirty (a smudge filter, a
+                # submodule pointer). The merge is the part that is always skipped.
+                warn "spec-base: the checkout has uncommitted changes, so the origin/main merge was skipped; commit or discard them in $spec_base_checkout" ;;
               fetch-failed)
                 warn "spec-base: could not fetch origin/main; coworkers' fixes were not merged" ;;
               merge-conflict)
                 warn "spec-base: origin/main conflicts with $SPEC_BASE_BRANCH; the merge was aborted, so resolve it by hand in $spec_base_checkout" ;;
             esac
           done
+        fi
+        if [ -n "$spec_base_drift" ]; then
+          warn "spec-base: origin/main changed files this skill depends on ($spec_base_drift); re-read them before trusting the skill's instructions"
         fi
       else
         info "spec-base: ${spec_base_cmd[0]} finished"

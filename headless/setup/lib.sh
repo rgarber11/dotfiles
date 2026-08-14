@@ -68,4 +68,10 @@ install_tarball() {   # $1 name  $2 tag  $3 url  $4 binary-path-in-archive  $5 s
 # re-resolving GitHub releases and re-running installers that already succeeded.
 export PATH="$HOME/.local/bin:$PATH"
 
-mkdir -p "$HOME/.local/bin" "$HOME/.local/opt" "$HOME/.local/state/dotfiles"
+# Guarded, even though a failure here means most steps below will fail anyway:
+# this file is sourced before any of them, so an unguarded non-zero (a full or
+# read-only PVC) aborts install.sh before a single step runs -- no shell config,
+# no git identity, nothing. Warning and letting the steps fail one at a time,
+# each with its own message, is strictly more diagnosable than one silent exit.
+mkdir -p "$HOME/.local/bin" "$HOME/.local/opt" "$HOME/.local/state/dotfiles" ||
+  warn "could not create the ~/.local directories; most steps below will fail"
