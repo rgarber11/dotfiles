@@ -168,7 +168,13 @@ else
           # a healthy restart found nothing new -- worth a warn, not the same
           # info line a restart with N already-correct links would print.
           warn "spec-base: linked nothing at all; the local review layer is not installed"
-        elif [ "$spec_base_new" = 0 ] && [ "$spec_base_re" = 0 ]; then
+        elif [ "$spec_base_new" = 0 ] && [ "$spec_base_re" = 0 ] && [ "$spec_base_ok" != 0 ]; then
+          # The ok != 0 test matters: with conflicts present but nothing correct,
+          # this branch would otherwise print "0 links already correct" -- a
+          # sentence whose own number contradicts its verb. Falling through to the
+          # triple below states all three counts instead, and the conflict warn
+          # follows it. A partial state (4 correct, 2 conflicted) still lands here,
+          # which is the most useful thing this line can say.
           info "spec-base: $spec_base_ok links already correct"
         else
           info "spec-base: linked $spec_base_new, relinked $spec_base_re, already correct $spec_base_ok"
