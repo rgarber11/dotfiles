@@ -43,6 +43,42 @@ set -e
 mkdir -p ~/.config/coderv2
 rm -rf ~/.config/coderv2/dotfiles
 cp -r /repo ~/.config/coderv2/dotfiles
+# The real spec-base repo is private and this container has no credentials, so
+# the setup step is pointed at a local git repo instead. Cloning a path needs no
+# credentials. It holds only a stub launcher that logs its argv and prints the
+# real launcher's JSON shape, which is exactly the seam worth testing here: which
+# subcommand the step chooses. The launcher itself has its own test suite.
+FIXTURE=~/.cache/spec-base-fixture
+if [ ! -d "$FIXTURE/.git" ]; then
+  mkdir -p "$FIXTURE/packages/spec-base-local/bin"
+  cat > "$FIXTURE/packages/spec-base-local/bin/spec-base-local.mjs" <<'STUB'
+#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+appendFileSync(`${process.env.HOME}/spec-base-stub.log`, `${process.argv.slice(2).join(' ')}\n`);
+// cmdInstall spreads install()'s fields at the top level; cmdUpdate nests them
+// under "install". This mimics the install shape, which is what a normal start
+// invokes.
+console.log(
+  JSON.stringify({
+    checkout: 'stub',
+    linked: ['skills/spec-base-local'],
+    relinked: [],
+    alreadyCorrect: [],
+    conflicts: [],
+  }),
+);
+STUB
+  git -C "$FIXTURE" init -q -b main
+  git -C "$FIXTURE" add -A
+  git -C "$FIXTURE" -c user.email=t@example.com -c user.name=T commit -qm fixture
+fi
+export SPEC_BASE_REPO="$FIXTURE"
+export SPEC_BASE_BRANCH=main
+# A leftover temp dir from a clone killed partway through must be cleared, not
+# tripped over: git refuses to clone into a non-empty directory, so without the
+# pre-clone rm -rf the step would fail on every start from here on.
+mkdir -p ~/.claude/spec-base-local/.checkout.tmp
+echo junk > ~/.claude/spec-base-local/.checkout.tmp/junk
 # Measured right after the clone, before install.sh runs: catches install.sh
 # (or anything it runs, like `:Lazy update`) writing INTO the clone. A flat
 # zero would false-fail on a host with an in-progress edit to install.sh, so
@@ -171,6 +207,11 @@ nvim --headless \
   -c 'lua local f=io.open("/tmp/nvim-colors","w") f:write(vim.g.colors_name or "none") f:close()' \
   -c qa >/dev/null 2>&1 || true
 echo "colorscheme=$(cat /tmp/nvim-colors 2>/dev/null || echo unknown)"
+echo "spec_checkout=$([ -d ~/.claude/spec-base-local/checkout/.git ] && echo present || echo absent)"
+echo "spec_hub=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.env.HOME + "/.claude/spec-base-local/config.json", "utf8")).hub)' 2>/dev/null || echo none)"
+# The last line, not the whole file: the log persists on the volume across runs.
+echo "spec_argv=$(tail -1 ~/spec-base-stub.log 2>/dev/null)"
+echo "spec_junk=$([ -e ~/.claude/spec-base-local/checkout/junk ] && echo present || echo absent)"
 SH
 )"
 echo "$CHECKS"
@@ -211,6 +252,13 @@ assert_contains "nvim config symlinks into the repo" \
 assert_contains "the image's system zsh config is opted out of" "no_system_rc=yes" "$CHECKS"
 assert_contains "pre-existing zshrc was backed up, not clobbered" "backups=1" "$CHECKS"
 assert_contains "install.sh does not modify the dotfiles clone" "repo_status_delta=0" "$FIRST"
+assert_contains "the spec-base checkout is cloned" "spec_checkout=present" "$CHECKS"
+assert_contains "the hub is pinned to hosted" "spec_hub=hosted" "$CHECKS"
+# A normal start must never run the networked update: it fetches and merges
+# origin/main, which is upgrade-only work in this repo.
+assert_contains "a normal start links only" "spec_argv=install" "$CHECKS"
+assert_contains "a leftover temp dir does not block a good clone" "spec_checkout=present" "$CHECKS"
+assert_contains "the leftover temp dir is not adopted as the checkout" "spec_junk=absent" "$CHECKS"
 
 echo
 echo "=== second install (new container, same home: simulates restart) ==="

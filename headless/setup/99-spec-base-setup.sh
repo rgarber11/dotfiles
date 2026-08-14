@@ -108,6 +108,51 @@ else
     # ours to do, and saying nothing would look like a successful install.
     warn "spec-base: $spec_base_checkout exists but is not a git checkout; move it aside or delete it, then re-run"
   fi
+
+  # -e .git, not just "did the clone block above run": a checkout that is
+  # absent, or present but not a git repo, was already warned about above --
+  # warning again here would just be noise. But a checkout that IS a valid git
+  # repo and still has no launcher at this path (upstream restructured, or a
+  # clone that landed with a broken tree) has never been warned about, and
+  # silently skipping the link step would look like a successful install.
+  if [ ! -e "$spec_base_checkout/.git" ]; then
+    : # absent or not-a-checkout: the block above already warned
+  elif [ ! -f "$spec_base_launcher" ]; then
+    warn "spec-base: $spec_base_checkout has no launcher at packages/spec-base-local/bin/spec-base-local.mjs; delete it and re-run to reclone"
+  else
+    # `install` is link-only: no network, no git repo, no hub. `update` also
+    # fast-forwards this branch and merges origin/main, so it is upgrade-only --
+    # the rule every other step in this profile follows. /spec-base-update inside
+    # a session is the other way to get it.
+    if [ "${UPGRADE:-0}" = 1 ]; then
+      spec_base_cmd=(update --hosted --repo "$SPEC_BASE_REPO" --branch "$SPEC_BASE_BRANCH")
+    else
+      spec_base_cmd=(install)
+    fi
+    if spec_base_report="$(node "$spec_base_launcher" "${spec_base_cmd[@]}")"; then
+      # node -e and not jq: node is a hard requirement two lines up, jq is not
+      # guaranteed anywhere. `install` spreads its counts at the top level while
+      # `update` nests them under "install", so accept either.
+      # shellcheck disable=SC2016 # the ${...} below are JS template-literal
+      # interpolations, not shell expansions -- the single quotes are correct.
+      spec_base_counts="$(node -e '
+        const r = JSON.parse(require("fs").readFileSync(0, "utf8"));
+        const i = r.install ?? r;
+        const n = (a) => (a ?? []).length;
+        console.log(`${n(i.linked)} ${n(i.relinked)} ${n(i.alreadyCorrect)} ${n(i.conflicts)}`);
+      ' <<<"$spec_base_report" 2>/dev/null)" || spec_base_counts=""
+      if [ -n "$spec_base_counts" ]; then
+        read -r spec_base_new spec_base_re spec_base_ok spec_base_bad <<<"$spec_base_counts"
+        info "spec-base: linked $spec_base_new, relinked $spec_base_re, already correct $spec_base_ok"
+        [ "$spec_base_bad" = 0 ] ||
+          warn "spec-base: $spec_base_bad link(s) skipped; something in ~/.claude is not a symlink"
+      else
+        info "spec-base: ${spec_base_cmd[0]} finished"
+      fi
+    else
+      warn "spec-base: ${spec_base_cmd[0]} failed; run /spec-base-update in a session"
+    fi
+  fi
 fi
 
 # A failing command anywhere in this file aborts install.sh under `set -e`;
