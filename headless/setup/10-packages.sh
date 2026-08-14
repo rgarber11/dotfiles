@@ -37,11 +37,16 @@ fi
 
 # Ubuntu ships fd as fdfind to avoid a name clash.
 if command -v fdfind >/dev/null 2>&1 && [ ! -e "$HOME/.local/bin/fd" ]; then
-  # Guarded like every other filesystem write in this profile: unguarded, a
-  # read-only ~/.local/bin aborts the whole install over a convenience symlink.
-  ln -sfn "$(command -v fdfind)" "$HOME/.local/bin/fd" ||
+  # if/else, not `|| warn` with the info after it: the info line used to be
+  # reachable only because a failed ln aborted, so guarding the ln without moving
+  # the info made the failure path print a warning and "linked fd -> fdfind"
+  # together. Unguarded, a read-only ~/.local/bin aborts the whole install over a
+  # convenience symlink.
+  if ln -sfn "$(command -v fdfind)" "$HOME/.local/bin/fd"; then
+    info "linked fd -> fdfind"
+  else
     warn "could not link fd -> fdfind"
-  info "linked fd -> fdfind"
+  fi
 fi
 
 # noble's tree-sitter-cli is 0.20.8; nvim-treesitter's main branch needs current.
