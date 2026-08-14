@@ -156,9 +156,18 @@ step's wiring is right and that its failure path is safe.
    outcome**. A launcher whose `install` silently no-ops passes everything here, so
    nothing automated proves a single symlink appears — the manual `ls -l` in §3's
    checklist is the only check of that, and it must stay a named manual step rather
-   than quietly reading as covered. The stub does emit the nested `update` report
-   shape and rejects an unrecognised subcommand, so the parser's `report.install ??
-   report` line and our flag spelling are covered mechanically.
+   than quietly reading as covered.
+
+   The stub can emit the nested `update` report shape and rejects an unrecognised
+   subcommand, so the parser's `report.install ?? report` line and our flag spelling
+   are *available* to cover — but no assertion drives the `update` path yet, so today
+   that branch is verified by hand (§3's manual checklist) rather than mechanically.
+   The conflicts branch **is** covered, and dearly earned: it shipped uncovered for
+   one round and immediately hid a real bug — `c.link` resolves to
+   `String.prototype.link`, a legacy Annex B method present on every string, so the
+   intended string fallback never fired and the warn printed a JS function body. The
+   lesson generalises: the branches worth a fixture knob are exactly the ones that
+   only run when something is already wrong.
 3. **Restart path** — a new container on the same volume: no second clone, the
    stub gets `install` again, and `config.json` is not rewritten.
 4. **Failure path**, the honest test of clone-once-and-warn: a run with a bogus
