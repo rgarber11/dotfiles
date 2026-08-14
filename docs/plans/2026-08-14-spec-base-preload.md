@@ -68,10 +68,49 @@ and immediately after that `RUN` block (before `ARG USER=coder`) add:
 # below the 22 floor the spec-base launcher needs -- with the apt version the
 # setup step would skip itself and every spec-base assertion below would pass
 # without testing anything.
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+RUN curl -fsSL --max-time 120 https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && node --version | grep -q '^v24\.'
 ```
+
+The trailing `grep` is not decoration. `curl | bash` under `/bin/sh -c` discards
+curl's exit status, and there is a real window — a body truncated after the
+vendor script's `install_pre_reqs` (which repopulates the apt lists) but before
+`configure_repo` (which writes the nodesource source) — where `apt-get install
+nodejs` quietly installs noble's 18.19 and the **build succeeds**. Verified by
+building that exact case: unguarded it ships `v18.19.1`, guarded the build exits
+1. `--max-time 120` matches the precedent in `headless/setup/40-herdr.sh:12`.
+
+- [ ] **Step 2b: Assert the version in the harness too**
+
+The build guard cannot catch a `~/.local/bin/node` shadowing the image's node, or
+someone deleting the guard. Mirror what this repo already does for noble's chafa
+1.14 (`tests/run.sh:92-95`, commit 68d7e2c): assert the *version*, not the
+presence, when a distro version is the hazard. In the `CHECKS` heredoc add
+
+```bash
+echo "node=$(node --version)"
+```
+
+and with the other first-install assertions:
+
+```bash
+assert_contains "node is nodesource 24, not noble's 18.19" "node=v24." "$CHECKS"
+```
+
+That probe sits after the heredoc's `export PATH="$HOME/.local/bin:$PATH"`, so it
+asserts the node the setup steps actually resolve rather than only what the image
+shipped.
+
+- [ ] **Step 2c: Fix the comment this change falsifies**
+
+`headless/setup/10-packages.sh:46` says npm's default prefix is the root-owned
+`/usr/local`. Under nodesource the prefix derives from node's location and is
+`/usr` — confirm with `podman run --rm dotfiles-test npm config get prefix`, then
+correct the path only. The surrounding reasoning and its conclusion (`--prefix
+~/.local` is still right, because both are root-owned and both sit on ephemeral
+`/usr`) stand unchanged.
 
 - [ ] **Step 3: Verify**
 
