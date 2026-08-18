@@ -36,6 +36,8 @@ source "$ZSH_PLUGIN_DIR/powerlevel10k/powerlevel10k.zsh-theme"
 # Plugin order is load-bearing: autosuggestions, then syntax-highlighting,
 # then history-substring-search LAST -- it must bind after highlighting loads.
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=23'
+HISTORY_SUBSTRING_SEARCH_HIGHLIGHT_FOUND=''
+HISTORY_SUBSTRING_SEARCH_HIGHLIGHT_NOT_FOUND=''
 source "$ZSH_PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh"
 source "$ZSH_PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 source "$ZSH_PLUGIN_DIR/zsh-history-substring-search/zsh-history-substring-search.zsh"
