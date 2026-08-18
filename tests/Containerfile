@@ -6,14 +6,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       openssh-client gnupg2 zsh \
     && rm -rf /var/lib/apt/lists/* \
     && locale-gen en_US.UTF-8
-# Node 24 from nodesource, matching coder-dsp-base. Noble's nodejs is 18.19,
-# below the 22 floor the spec-base launcher needs -- with the apt version the
-# setup step would skip itself and every spec-base assertion below would pass
-# without testing anything (docs/specs/2026-08-14-spec-base-preload-design.md).
-RUN curl -fsSL --max-time 120 https://deb.nodesource.com/setup_24.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/* \
-    && node --version | grep -q '^v24\.'
 ARG USER=coder
 RUN useradd --groups sudo --create-home --shell /bin/bash ${USER} \
     && echo "${USER} ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/${USER} \

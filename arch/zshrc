@@ -95,4 +95,4 @@ herdr_remote() {
 
 . /usr/share/nvm/init-nvm.sh
 
-[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+[[ ! -f ~/.zshrc.local ]] || source ~/.zshrc.local

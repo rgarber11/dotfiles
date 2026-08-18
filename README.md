@@ -18,10 +18,9 @@ coder update <workspace> --parameter dotfiles_uri=https://github.com/rgarber11/d
 ```
 
 `dotup` inside the workspace re-resolves the latest Neovim, difftastic,
-fastfetch and chafa, pulls the zsh plugins, runs `herdr update`, and updates
-spec-base (see below). Every start otherwise touches the network only for apt
-to top up whatever `/usr` lost on restart, and for the spec-base clone below
-until it succeeds once.
+fastfetch and chafa, pulls the zsh plugins, and runs `herdr update`. Every
+start otherwise touches the network only for apt to top up whatever `/usr`
+lost on restart.
 
 The `dsp-base` image ships a zsh setup of its own — powerlevel10k, the same five
 plugins, and copies of `shared/zsh/{options,functions}.zsh` — sourced from
@@ -32,27 +31,6 @@ self-sufficient rather than layering onto the image's config, so `install.sh`
 still produces a working shell on a plain Ubuntu box — the steps the image has
 made redundant (terminfo, chafa, fastfetch, most of the apt packages, `chsh`)
 all guard on the tool being absent and simply go quiet there.
-
-`headless/setup/99-spec-base-setup.sh` preloads the spec-base local review
-layer — six symlinks in total: `~/.claude/skills/spec-base-local` plus five
-`/spec-base*` commands — out of a managed clone at
-`~/.claude/spec-base-local/checkout`. That clone happens once — `$HOME` is the
-PVC — and later starts only re-link, which needs no network. It is pinned to
-the hosted hub on janice (`config.json`, written only if absent) because a
-workspace is a k8s pod with no podman or docker, so the local hub cannot run
-there.
-
-The clone gets one attempt and does not wait, which is why the step is
-numbered last: git credentials come from Coder's external auth via an
-independent startup script, so running last gives that script the longest head
-start. The step also needs node 22+, which the image has and noble does not, and
-warns rather than installing one. It clones into a staging directory and moves that into place
-only on success: the only installed-check is whether the checkout path
-exists, so a half-built tree there would read as installed forever. A failed
-or interrupted clone just warns, and the next start retries. `dotup` (or
-`/spec-base-update` in a session) fast-forwards the branch and merges
-`origin/main`, keeping the launcher, skill and commands current; a normal
-start never does.
 
 ## Testing
 

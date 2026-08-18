@@ -47,4 +47,4 @@ bindkey -M emacs '^N' history-substring-search-down
 # Re-resolve the latest nvim/difft/fastfetch, pull zsh plugins, update herdr.
 alias dotup="$HOME/dotfiles/install.sh --upgrade"
 
-[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+[[ ! -f ~/.zshrc.local ]] || source ~/.zshrc.local
