@@ -111,6 +111,8 @@ echo "nvimcfg=$(readlink -f ~/.config/nvim || echo none)"
 # created. That it actually suppresses the system config is verified against
 # the real image.
 echo "no_system_rc=$([ -e ~/.config/zsh/no-system-rc ] && echo yes || echo no)"
+echo "history_up_ss3=$(zsh -ic 'bindkey "\\eOA"' 2>/dev/null | grep -q 'history-substring-search-up' && echo yes || echo no)"
+echo "history_down_ss3=$(zsh -ic 'bindkey "\\eOB"' 2>/dev/null | grep -q 'history-substring-search-down' && echo yes || echo no)"
 echo "gitconfig_first_line=$(head -1 ~/.gitconfig 2>/dev/null)"
 echo "git_email=$(git config --get user.email)"
 echo "zsh_ident=$(zsh -ic 'git var GIT_AUTHOR_IDENT' 2>/dev/null | tail -1)"
@@ -177,6 +179,8 @@ assert_contains "zshrc symlinks into the repo" \
 assert_contains "nvim config symlinks into the repo" \
   "nvimcfg=/home/coder/.config/coderv2/dotfiles/shared/nvim" "$CHECKS"
 assert_contains "the image's system zsh config is opted out of" "no_system_rc=yes" "$CHECKS"
+assert_contains "application Up searches history substrings" "history_up_ss3=yes" "$CHECKS"
+assert_contains "application Down searches history substrings" "history_down_ss3=yes" "$CHECKS"
 assert_contains "pre-existing zshrc was backed up, not clobbered" "backups=1" "$CHECKS"
 assert_contains "install.sh does not modify the dotfiles clone" "repo_status_delta=0" "$FIRST"
 
