@@ -1,7 +1,7 @@
 # Herdr remote Neovim clipboard bridge design
 
 Date: 2026-08-19
-Status: approved design, awaiting written-spec review
+Status: approved
 
 ## Goal
 
