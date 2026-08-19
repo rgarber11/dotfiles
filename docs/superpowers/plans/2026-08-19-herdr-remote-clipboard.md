@@ -1,12 +1,16 @@
 # Herdr Remote Neovim Clipboard Bridge Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+## Implementation outcome
+
+> **Completed and verified at `baf9081`.** This file preserves the original implementation checklist as historical context; it is not a current runbook. Original Tasks 3 and 4 were superseded by the evidence-driven responder and tunnel designs summarized below. The canonical final contract and observed verification results are in [the implemented design spec](../specs/2026-08-19-herdr-remote-clipboard-design.md).
+
+The final implementation uses a function-owned loopback socat responder that runs a fresh `wl-paste` after every accept, plus a second private, nonpersistent OpenSSH control master that owns the exact reverse forward. Herdr's `ControlPersist=yes` master made an SSH-config forward survive detach and collide with later sessions, so `~/.ssh/config` remains unchanged. The provider runs `nc 127.0.0.1 52052` without the half-close option because Neovim already closes provider stdin; using that option made socat terminate before returning clipboard output.
 
 **Goal:** Make `"+p` in Neovim inside `herdr --remote richard-worktree-2.coder` read the Arch desktop's current Wayland text clipboard while preserving OSC 52 for remote yanks.
 
-**Architecture:** A session-scoped OpenBSD netcat responder serves `wl-paste` on desktop loopback port 52052. Herdr's authenticated SSH connection reverse-forwards the same workspace loopback port, and headless Neovim uses an asymmetric custom clipboard provider: OSC 52 callbacks for copy, netcat for paste.
+**Architecture:** `herdr_remote()` owns a loopback socat `reuseaddr,fork` responder and a private `ControlPersist=no` OpenSSH master/reverse forward, each in an owned `setsid` process group. Headless Neovim uses OSC 52 callbacks for copy and `nc 127.0.0.1 52052` for uncached paste.
 
-**Tech Stack:** Zsh, OpenSSH `RemoteForward`, OpenBSD netcat, `wl-clipboard`, Neovim 0.12 Lua clipboard provider, Bash/Podman dotfiles tests.
+**Tech Stack:** Zsh, socat, `setsid`, OpenSSH control sockets and reverse forwarding, OpenBSD netcat, `wl-clipboard`, Neovim 0.12 Lua clipboard provider, Bash/Podman dotfiles tests.
 
 ---
 
@@ -15,12 +19,16 @@
 - `tests/run.sh` — container-level assertions that the Coder install supplies netcat and configures the expected headless Neovim provider.
 - `headless/setup/10-packages.sh` — installs Ubuntu's `netcat-openbsd` package on each ephemeral Coder container.
 - `shared/nvim/init.lua` — selects the asymmetric clipboard provider only for the existing headless/Coder profile.
-- `arch/zshrc` — canonical tracked desktop `herdr_remote()` implementation and responder lifecycle.
-- `/home/rgarber11/.zshrc` — active desktop copy of the same `herdr_remote()` function; update only that function because the file has unrelated machine-local drift.
-- `/home/rgarber11/.ssh/config` — active exact-host reverse forward; add outside the Coder-managed block.
-- `docs/superpowers/specs/2026-08-19-herdr-remote-clipboard-design.md` — approved behavioral and security contract; no implementation edits expected.
+- `arch/zshrc` — canonical tracked desktop `herdr_remote()` implementation, including responder, tunnel, and whole-process-group cleanup.
+- `/home/rgarber11/.zshrc` — active desktop copy of the same `herdr_remote()` function; only that function was updated because the file has unrelated machine-local drift.
+- `/home/rgarber11/.ssh/config` — unchanged; it has no clipboard stanza.
+- `docs/superpowers/specs/2026-08-19-herdr-remote-clipboard-design.md` — canonical implemented and verified behavioral, lifecycle, and security contract.
 
-Do not replace the active desktop Zsh or SSH files with tracked copies. Make surgical edits only.
+Do not replace the active desktop Zsh file with the tracked copy. Make surgical edits only.
+
+## Historical implementation record
+
+> The unchecked boxes and commands below record the original proposal, not remaining work or current instructions. In particular, Tasks 3 and 4 contain superseded approaches and are labeled accordingly.
 
 ### Task 1: Capture the broken OSC 52 paste baseline
 
@@ -84,7 +92,7 @@ Add these assertions with the other first-install assertions:
 ```bash
 assert_not_contains "netcat installed" "nc=none" "$CHECKS"
 assert_contains "headless Neovim uses the Herdr clipboard bridge" \
-  "clipboard_provider=herdr-remote|function|nc -N 127.0.0.1 52052|0" "$CHECKS"
+  "clipboard_provider=herdr-remote|function|nc 127.0.0.1 52052|0" "$CHECKS"
 ```
 
 - [ ] **Step 2: Run the changed test and verify the new contract fails**
@@ -121,8 +129,8 @@ if headless then
       ['*'] = osc52.copy '*',
     },
     paste = {
-      ['+'] = { 'nc', '-N', '127.0.0.1', '52052' },
-      ['*'] = { 'nc', '-N', '127.0.0.1', '52052' },
+      ['+'] = { 'nc', '127.0.0.1', '52052' },
+      ['*'] = { 'nc', '127.0.0.1', '52052' },
     },
     cache_enabled = 0,
   }
@@ -142,7 +150,7 @@ Run:
 Expected: `netcat installed` and `headless Neovim uses the Herdr clipboard bridge` pass. The emitted provider line is exactly:
 
 ```text
-clipboard_provider=herdr-remote|function|nc -N 127.0.0.1 52052|0
+clipboard_provider=herdr-remote|function|nc 127.0.0.1 52052|0
 ```
 
 - [ ] **Step 6: Check Neovim diagnostics for the changed config**
@@ -158,7 +166,9 @@ git add tests/run.sh headless/setup/10-packages.sh shared/nvim/init.lua
 git commit -m "feat: bridge remote Neovim clipboard paste"
 ```
 
-### Task 3: Make `herdr_remote()` own the desktop responder
+### Task 3: Historical / superseded desktop responder
+
+> **Superseded — do not implement:** The netcat listener and sleep-based readiness below were replaced by one function-owned `setsid` socat master using `reuseaddr,fork`, an exact PID-bearing post-bind diagnostic in a private log, and whole-process-group cleanup. This section remains only as the original plan record.
 
 **Files:**
 - Modify: `arch/zshrc:85-94`
@@ -243,7 +253,9 @@ git commit -m "feat: serve clipboard during remote Herdr attach"
 
 The active `/home/rgarber11/.zshrc` is outside this repository and is intentionally not part of the commit.
 
-### Task 4: Route the responder through Herdr's SSH connection
+### Task 4: Historical / superseded SSH-config forwarding
+
+> **Superseded — do not implement:** The SSH-config stanza below was replaced by a second function-owned `ControlPersist=no` master with a private control socket. The function waits with `ssh -O check`, installs the exact reverse forward synchronously with `ssh -O forward`, and cleans up with `ssh -O exit`, process-group/direct-PID fallback, wait, and private artifact removal. Herdr's `ControlPersist=yes` connection made the config-based forward outlive detach and collide with later sessions.
 
 **Files:**
 - Modify: `/home/rgarber11/.ssh/config:22` (append after the Coder-managed block)
@@ -329,7 +341,7 @@ ssh richard-worktree-2.coder 'command -v nc && nvim --headless "+lua local c=vim
 Expected output includes an `nc` path and:
 
 ```text
-herdr-remote nc -N 127.0.0.1 52052
+herdr-remote nc 127.0.0.1 52052
 ```
 
 - [ ] **Step 4: Launch the real session and prove desktop-to-remote paste**
