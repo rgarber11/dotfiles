@@ -95,7 +95,7 @@ zsh -n /home/rgarber11/dotfiles/arch/zshrc
 
 Expected: the Python contract exits 0; both zsh parses exit 0 with no output.
 
-- [ ] **Step 5: Review the focused tracked diff**
+- [ ] **Step 5: Review the launcher edits without staging user work**
 
 Run:
 
@@ -104,16 +104,11 @@ git diff --check -- arch/zshrc
 git diff -- arch/zshrc
 ```
 
-Expected: no whitespace errors. The diff contains only the helper replacement and two caller renames, preserving the user's other existing `arch/zshrc` work.
+Expected: no whitespace errors. Compare the resulting helper and two call lines with the pre-edit snapshot. The full git diff also contains the user's pre-existing uncommitted `gpt_code()`/`monet()` launcher work; do not treat that existing diff as part of this change.
 
-- [ ] **Step 6: Commit only the tracked launcher change**
+- [ ] **Step 6: Leave the tracked launcher unstaged**
 
-```bash
-git add arch/zshrc
-git commit -m "feat: use repeatable Herdr agent display labels"
-```
-
-Do not add the pre-existing untracked HTML artifact. The live `.zshrc` is outside git and remains active runtime configuration.
+Do not stage or commit `arch/zshrc`: the intended display-label edits share a file and hunks with the user's pre-existing uncommitted launcher work, so staging the file would capture work that this task does not own. Do not add the pre-existing untracked HTML artifact. The live `.zshrc` is outside git and remains active runtime configuration.
 
 ### Task 2: Migrate and verify active Herdr panes
 
