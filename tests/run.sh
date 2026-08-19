@@ -60,6 +60,7 @@ chmod +x ~/.config/coderv2/dotfiles/install.sh
 # alone.
 [ -e ~/.zshrc ] || echo '# pre-existing user file' > ~/.zshrc
 ~/.config/coderv2/dotfiles/install.sh
+echo "nc=$(command -v nc || echo none)"
 REPO_STATUS_AFTER="$(git -C ~/.config/coderv2/dotfiles status --porcelain -uno | wc -l)"
 echo "repo_status_delta=$((REPO_STATUS_AFTER - REPO_STATUS_BEFORE))"
 # fortune and cowsay come from 10-packages.sh's apt install, which -- like
@@ -142,8 +143,10 @@ echo "greet_before_instant=$(awk '
 # captured value and fails the assertion for reasons unrelated to the theme.
 nvim --headless \
   -c 'lua local f=io.open("/tmp/nvim-colors","w") f:write(vim.g.colors_name or "none") f:close()' \
+  -c 'lua local clipboard=vim.g.clipboard local f=io.open("/tmp/nvim-clipboard-provider","w") f:write(table.concat({ clipboard.name, type(clipboard.copy["+"]), table.concat(clipboard.paste["+"], " "), clipboard.cache_enabled }, "|")) f:close()' \
   -c qa >/dev/null 2>&1 || true
 echo "colorscheme=$(cat /tmp/nvim-colors 2>/dev/null || echo unknown)"
+echo "clipboard_provider=$(cat /tmp/nvim-clipboard-provider 2>/dev/null || echo unknown)"
 SH
 )"
 echo "$CHECKS"
@@ -152,6 +155,7 @@ assert_not_contains "nvim installed"      "nvim=none"      "$CHECKS"
 assert_not_contains "difftastic installed" "difft=none"    "$CHECKS"
 assert_not_contains "fastfetch installed" "fastfetch=none" "$CHECKS"
 assert_not_contains "herdr installed"     "herdr=none"     "$CHECKS"
+assert_not_contains "netcat installed" "nc=none" "$FIRST"
 assert_contains "nvim is under ~/.local"  "nvim=/home/coder/.local/bin/nvim" "$CHECKS"
 assert_contains "chafa is the ~/.local build, not noble's 1.14" \
   "chafa=/home/coder/.local/bin/chafa" "$CHECKS"
@@ -166,6 +170,9 @@ assert_contains "bash identity beats the agent env" \
   "bash_ident=Richard Garber <9834847+rgarber11@users.noreply.github.com>" "$CHECKS"
 assert_not_contains "the wrong address never wins" "wrong@example.com" "$CHECKS"
 assert_contains "nvim uses catppuccin mocha in the workspace" "colorscheme=catppuccin-mocha" "$CHECKS"
+assert_contains "headless Neovim uses the Herdr clipboard bridge" \
+  $'\nclipboard_provider=herdr-remote|function|nc -N 127.0.0.1 52052|0\n' \
+  $'\n'"$CHECKS"$'\n'
 assert_contains "login shell is zsh"      "shell=/usr/bin/zsh" "$FIRST"
 # assert_not_contains does a plain substring match, and "greeting=" is a
 # substring of "greeting=Some fortune text" just as much as of "greeting="

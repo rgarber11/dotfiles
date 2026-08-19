@@ -58,6 +58,21 @@ vim.opt.rtp:prepend(lazypath)
 -- so it is a more reliable signal than $CODER_AGENT_URL, which depends on the
 -- agent's environment being inherited by whatever launched nvim.
 local headless = vim.uv.fs_stat('/mnt/dsp-seed') ~= nil or vim.env.CODER_AGENT_URL ~= nil
+if headless then
+  local osc52 = require 'vim.ui.clipboard.osc52'
+  vim.g.clipboard = {
+    name = 'herdr-remote',
+    copy = {
+      ['+'] = osc52.copy '+',
+      ['*'] = osc52.copy '*',
+    },
+    paste = {
+      ['+'] = { 'nc', '-N', '127.0.0.1', '52052' },
+      ['*'] = { 'nc', '-N', '127.0.0.1', '52052' },
+    },
+    cache_enabled = 0,
+  }
+end
 
 require('lazy').setup({
   -- Git Helper

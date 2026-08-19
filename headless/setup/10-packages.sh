@@ -9,7 +9,7 @@ APT_PACKAGES=(
   imagemagick libmagickwand-dev
   python3-pip
   fortune-mod fortunes cowsay
-  qrencode btop file
+  qrencode btop file netcat-openbsd
 )
 
 missing=()
