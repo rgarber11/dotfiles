@@ -83,12 +83,80 @@ gpt_code() {
 }
 
 herdr_remote() {
-  local original_kitty_colors
+  setopt localoptions
+  local original_kitty_colors clipboard_server_log='' clipboard_server_pid='' clipboard_server_pgid=''
+  local clipboard_server_observed_pgid clipboard_server_ready=false clipboard_server_monitor=false
+  [[ -o monitor ]] && clipboard_server_monitor=true
+  setopt nomonitor
   original_kitty_colors=$(kitty @ get-colors) || return
   {
-    kitty @ set-colors "~/.config/kitty/kitty-themes/Catppuccin-Mocha.conf"
+    if ! clipboard_server_log=$(mktemp "${TMPDIR:-/tmp}/herdr_remote.XXXXXXXX" 2>/dev/null); then
+      print -u2 'herdr_remote: could not bind clipboard responder to 127.0.0.1:52052'
+      return 1
+    fi
+
+    setsid socat -d -d -lf "$clipboard_server_log" \
+      TCP4-LISTEN:52052,bind=127.0.0.1,reuseaddr,fork \
+      SYSTEM:'wl-paste --no-newline 2>/dev/null' >/dev/null 2>&1 &
+    clipboard_server_pid=$!
+    clipboard_server_pgid=$clipboard_server_pid
+    if [[ "$clipboard_server_monitor" == true ]]; then
+      setopt monitor
+    fi
+    clipboard_server_observed_pgid=$(ps -o pgid= -p "$clipboard_server_pid" 2>/dev/null)
+    clipboard_server_observed_pgid=${clipboard_server_observed_pgid//[[:space:]]/}
+
+    for _ in {1..20}; do
+      if ! kill -0 "$clipboard_server_pid" 2>/dev/null; then
+        break
+      fi
+      sleep 0.05
+      if ! kill -0 "$clipboard_server_pid" 2>/dev/null; then
+        break
+      fi
+
+      clipboard_server_observed_pgid=$(ps -o pgid= -p "$clipboard_server_pid" 2>/dev/null)
+      clipboard_server_observed_pgid=${clipboard_server_observed_pgid//[[:space:]]/}
+
+      if [[ "$clipboard_server_observed_pgid" == "$clipboard_server_pid" &&
+            "$(<"$clipboard_server_log")" == *"socat[$clipboard_server_pid] N listening on AF=2 127.0.0.1:52052"* ]]; then
+        clipboard_server_ready=true
+        break
+      fi
+    done
+
+    if [[ "$clipboard_server_ready" != true ]]; then
+      if [[ -n "$clipboard_server_pgid" ]] &&
+          kill -0 -- "-$clipboard_server_pgid" 2>/dev/null; then
+        kill -TERM -- "-$clipboard_server_pgid" 2>/dev/null
+      elif kill -0 "$clipboard_server_pid" 2>/dev/null; then
+        kill "$clipboard_server_pid" 2>/dev/null
+      fi
+      wait "$clipboard_server_pid" 2>/dev/null
+      rm -f -- "$clipboard_server_log"
+      clipboard_server_log=''
+      clipboard_server_pid=''
+      clipboard_server_pgid=''
+      print -u2 'herdr_remote: could not bind clipboard responder to 127.0.0.1:52052'
+      return 1
+    fi
+
+    kitty @ set-colors '~/.config/kitty/kitty-themes/Catppuccin-Mocha.conf'
     herdr --remote richard-worktree-2.coder
   } always {
+    if [[ -n "$clipboard_server_pgid" ]] &&
+        kill -0 -- "-$clipboard_server_pgid" 2>/dev/null; then
+      kill -TERM -- "-$clipboard_server_pgid" 2>/dev/null
+    elif [[ -n "$clipboard_server_pid" ]] &&
+        kill -0 "$clipboard_server_pid" 2>/dev/null; then
+      kill "$clipboard_server_pid" 2>/dev/null
+    fi
+    if [[ -n "$clipboard_server_pid" ]]; then
+      wait "$clipboard_server_pid" 2>/dev/null
+    fi
+    if [[ -n "$clipboard_server_log" ]]; then
+      rm -f -- "$clipboard_server_log"
+    fi
     kitty @ set-colors <(print -r -- "$original_kitty_colors")
   }
 }
