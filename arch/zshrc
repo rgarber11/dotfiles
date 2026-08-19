@@ -84,8 +84,12 @@ gpt_code() {
 
 herdr_remote() {
   setopt localoptions
+  setopt localtraps
+  trap 'return 130' INT
   local original_kitty_colors clipboard_server_log='' clipboard_server_pid='' clipboard_server_pgid=''
   local clipboard_server_observed_pgid clipboard_server_ready=false clipboard_server_monitor=false
+  local clipboard_ssh_dir='' clipboard_ssh_socket='' clipboard_ssh_pid='' clipboard_ssh_pgid=''
+  local clipboard_ssh_observed_pgid clipboard_ssh_ready=false
   [[ -o monitor ]] && clipboard_server_monitor=true
   setopt nomonitor
   original_kitty_colors=$(kitty @ get-colors) || return
@@ -141,9 +145,78 @@ herdr_remote() {
       return 1
     fi
 
+    if ! clipboard_ssh_dir=$(mktemp -d "${TMPDIR:-/tmp}/herdr_remote.ssh.XXXXXXXX" 2>/dev/null); then
+      print -u2 'herdr_remote: could not establish clipboard SSH tunnel'
+      return 1
+    fi
+    clipboard_ssh_socket="$clipboard_ssh_dir/control"
+
+    setopt nomonitor
+    setsid ssh -M -S "$clipboard_ssh_socket" -N -T -n \
+      -o ControlPersist=no \
+      -o ExitOnForwardFailure=yes \
+      -o ClearAllForwardings=yes \
+      richard-worktree-2.coder >/dev/null 2>&1 &
+    clipboard_ssh_pid=$!
+    clipboard_ssh_pgid=$clipboard_ssh_pid
+    if [[ "$clipboard_server_monitor" == true ]]; then
+      setopt monitor
+    fi
+
+    for _ in {1..240}; do
+      if ! kill -0 "$clipboard_ssh_pid" 2>/dev/null; then
+        break
+      fi
+      sleep 0.25
+      if ! kill -0 "$clipboard_ssh_pid" 2>/dev/null; then
+        break
+      fi
+      clipboard_ssh_observed_pgid=$(ps -o pgid= -p "$clipboard_ssh_pid" 2>/dev/null)
+      clipboard_ssh_observed_pgid=${clipboard_ssh_observed_pgid//[[:space:]]/}
+      if [[ "$clipboard_ssh_observed_pgid" == "$clipboard_ssh_pid" &&
+            -S "$clipboard_ssh_socket" ]] &&
+          ssh -S "$clipboard_ssh_socket" -O check richard-worktree-2.coder >/dev/null 2>&1; then
+        clipboard_ssh_ready=true
+        break
+      fi
+    done
+
+    if [[ "$clipboard_ssh_ready" != true ]]; then
+      print -u2 'herdr_remote: could not establish clipboard SSH tunnel'
+      return 1
+    fi
+
+    if ! ssh -S "$clipboard_ssh_socket" -O forward \
+        -R 127.0.0.1:52052:127.0.0.1:52052 \
+        richard-worktree-2.coder >/dev/null 2>&1; then
+      print -u2 'herdr_remote: could not establish clipboard SSH tunnel'
+      return 1
+    fi
+
     kitty @ set-colors '~/.config/kitty/kitty-themes/Catppuccin-Mocha.conf'
     herdr --remote richard-worktree-2.coder
   } always {
+    if [[ -n "$clipboard_ssh_socket" && -S "$clipboard_ssh_socket" ]]; then
+      ssh -S "$clipboard_ssh_socket" -O exit richard-worktree-2.coder >/dev/null 2>&1
+    fi
+    if [[ -n "$clipboard_ssh_pgid" ]] &&
+        kill -0 -- "-$clipboard_ssh_pgid" 2>/dev/null; then
+      kill -TERM -- "-$clipboard_ssh_pgid" 2>/dev/null
+    elif [[ -n "$clipboard_ssh_pid" ]] &&
+        kill -0 "$clipboard_ssh_pid" 2>/dev/null; then
+      kill "$clipboard_ssh_pid" 2>/dev/null
+    fi
+    if [[ -n "$clipboard_ssh_pid" ]]; then
+      wait "$clipboard_ssh_pid" 2>/dev/null
+    fi
+    if [[ -n "$clipboard_ssh_dir" && -n "$clipboard_ssh_socket" &&
+          "$clipboard_ssh_socket" == "$clipboard_ssh_dir/control" ]]; then
+      rm -f -- "$clipboard_ssh_socket" "$clipboard_ssh_socket".*(N)
+    fi
+    if [[ -n "$clipboard_ssh_dir" ]]; then
+      rmdir -- "$clipboard_ssh_dir" 2>/dev/null
+    fi
+
     if [[ -n "$clipboard_server_pgid" ]] &&
         kill -0 -- "-$clipboard_server_pgid" 2>/dev/null; then
       kill -TERM -- "-$clipboard_server_pgid" 2>/dev/null
