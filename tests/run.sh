@@ -171,7 +171,7 @@ assert_contains "bash identity beats the agent env" \
 assert_not_contains "the wrong address never wins" "wrong@example.com" "$CHECKS"
 assert_contains "nvim uses catppuccin mocha in the workspace" "colorscheme=catppuccin-mocha" "$CHECKS"
 assert_contains "headless Neovim uses the Herdr clipboard bridge" \
-  $'\nclipboard_provider=herdr-remote|function|nc -N 127.0.0.1 52052|0\n' \
+  $'\nclipboard_provider=herdr-remote|function|nc 127.0.0.1 52052|0\n' \
   $'\n'"$CHECKS"$'\n'
 assert_contains "login shell is zsh"      "shell=/usr/bin/zsh" "$FIRST"
 # assert_not_contains does a plain substring match, and "greeting=" is a
