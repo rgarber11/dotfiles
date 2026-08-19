@@ -4,7 +4,7 @@
 
 **Goal:** Replace unique numbered Herdr custom names with repeatable display-only `gpt_code` and `monet` labels, matching how concurrent OMP panes all display `omp`.
 
-**Architecture:** The zsh launcher helper will wait until Herdr detects the Claude pane, then report presentation metadata scoped to the canonical `herdr:claude` integration source. Runtime migration will clear only matching GPT/Monet custom names and apply the same metadata, leaving agent identity, session authority, and unrelated panes untouched.
+**Architecture:** The zsh launcher helper will wait until Herdr detects the Claude pane, then report presentation metadata scoped to agent `claude`. Runtime migration will clear only matching GPT/Monet custom names and apply the same metadata, leaving agent identity, session authority, and unrelated panes untouched. Do not use `applies-to-source`: the canonical hook supplies session identity but does not own lifecycle hook authority, so that guard is accepted but hides presentation metadata.
 
 **Tech Stack:** zsh, Herdr 0.8.0 CLI/API, JSON inspection, dotfiles shell test suite.
 
@@ -34,8 +34,8 @@ for path in (Path.home() / ".zshrc", Path.home() / "dotfiles/arch/zshrc"):
     assert 'herdr pane report-metadata \\' in source
     assert '--source user:zsh-claude-display \\' in source
     assert '--agent claude \\' in source
-    assert '--applies-to-source herdr:claude \\' in source
-    assert '--display-agent "$display_agent" \\' in source
+    assert "--applies-to-source" not in source
+    assert '--display-agent "$display_label"' in source
     assert '_label_herdr_agent "$HERDR_PANE_ID" gpt_code &!' in source
     assert '_label_herdr_agent "$HERDR_PANE_ID" monet &!' in source
 PY
@@ -50,17 +50,15 @@ Replace `_name_herdr_agent` in `/home/rgarber11/dotfiles/arch/zshrc` with:
 ```zsh
 _label_herdr_agent() {
   local pane_id=$1
-  local display_agent=$2
+  local display_label=$2
   local attempt
 
   for attempt in {1..50}; do
     if herdr agent get "$pane_id" >/dev/null 2>&1 &&
-      herdr pane report-metadata \
+      herdr pane report-metadata "$pane_id" \
         --source user:zsh-claude-display \
         --agent claude \
-        --applies-to-source herdr:claude \
-        --display-agent "$display_agent" \
-        "$pane_id" >/dev/null 2>&1; then
+        --display-agent "$display_label" >/dev/null 2>&1; then
       return
     fi
     sleep 0.1
@@ -166,12 +164,10 @@ for pane_id, display_agent in targets:
     )
     subprocess.run(
         [
-            "herdr", "pane", "report-metadata",
+            "herdr", "pane", "report-metadata", pane_id,
             "--source", "user:zsh-claude-display",
             "--agent", "claude",
-            "--applies-to-source", "herdr:claude",
             "--display-agent", display_agent,
-            pane_id,
         ],
         check=True,
     )

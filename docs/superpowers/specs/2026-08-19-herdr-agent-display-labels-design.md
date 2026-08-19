@@ -24,7 +24,7 @@ The helper accepts a pane ID and display label, retries until `herdr agent get` 
 
 - A stable user-owned metadata source.
 - Agent scope `claude`.
-- `applies-to-source` set to the canonical Claude integration source `herdr:claude`.
+- No `applies-to-source` guard. The canonical hook reports Claude session identity but does not own lifecycle hook authority, so guarding against `herdr:claude` is accepted by the API but hides the metadata. Agent scope `claude` ties metadata cleanup to the detected Claude process.
 - `display-agent` set to `gpt_code` or `monet`.
 
 Update `gpt_code()` and `monet()` to call the display-label helper in the same asynchronous launch position as the current rename helper. Delete the suffix loop and all custom-name assignment behavior.
@@ -46,7 +46,7 @@ This migration is runtime state only. Future launches use the updated helper.
 
 Concurrent panes may share the visible label `gpt_code` or `monet`, matching OMP's repeated `omp` display. Their pane IDs remain unique. A label alone is no longer a unique CLI target when multiple matching panes exist; callers must use a pane ID or another unique target.
 
-Metadata is presentation-only and scoped to the active `herdr:claude` source, so it does not replace the canonical hook's session association, lifecycle state, or detected Claude agent identity.
+Metadata is presentation-only and agent-scoped to `claude`, so it follows the detected Claude process without replacing the canonical hook's session association, lifecycle state, or agent identity. The `herdr:claude` session source remains unchanged.
 
 ## Verification
 
