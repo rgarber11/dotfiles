@@ -57,10 +57,10 @@ cat > "$workdir/bin/claude" <<'STUB'
   printf 'opus=%s\n' "${ANTHROPIC_DEFAULT_OPUS_MODEL-}"
   printf 'sonnet=%s\n' "${ANTHROPIC_DEFAULT_SONNET_MODEL-}"
   printf 'haiku=%s\n' "${ANTHROPIC_DEFAULT_HAIKU_MODEL-}"
-  if [ -n "${ANTHROPIC_AUTH_TOKEN-}" ]; then
-    printf 'auth=set\n'
+  if [ "${ANTHROPIC_AUTH_TOKEN-}" = "$EXPECTED_AUTH_TOKEN" ]; then
+    printf 'auth=expected\n'
   else
-    printf 'auth=unset\n'
+    printf 'auth=unexpected\n'
   fi
   printf 'argc=%s\n' "$#"
   index=1
@@ -81,6 +81,7 @@ chmod +x "$workdir/bin/claude" "$workdir/bin/herdr"
 export PATH="$workdir/bin:$PATH"
 export CLAUDE_CAPTURE="$workdir/claude-capture"
 export HERDR_CAPTURE="$workdir/herdr-capture"
+export EXPECTED_AUTH_TOKEN=test-token
 
 fail() {
   print -u2 -- "FAIL: $1"
@@ -94,11 +95,15 @@ assert_contains() {
   [[ "$haystack" == *"$needle"* ]] || fail "$description (missing: $needle)"
 }
 
-assert_not_contains() {
+assert_line() {
   local description=$1
-  local needle=$2
+  local expected=$2
   local haystack=$3
-  [[ "$haystack" != *"$needle"* ]] || fail "$description (unexpected: $needle)"
+  local line
+  for line in ${(f)haystack}; do
+    [[ "$line" == "$expected" ]] && return 0
+  done
+  fail "$description (missing line: $expected)"
 }
 
 assert_empty_file() {
@@ -114,13 +119,28 @@ reset_captures() {
   : > "$workdir/stderr"
 }
 
+reset_claude_environment() {
+  unset CLAUDE_CONFIG_DIR \
+    ANTHROPIC_BASE_URL \
+    ENABLE_CLAUDEAI_MCP_SERVERS \
+    DISABLE_TELEMETRY \
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \
+    ANTHROPIC_DEFAULT_OPUS_MODEL \
+    ANTHROPIC_DEFAULT_SONNET_MODEL \
+    ANTHROPIC_DEFAULT_HAIKU_MODEL
+  export ANTHROPIC_AUTH_TOKEN=test-token
+}
+
 wait_for_label() {
   local description=$1
   local expected=$2
-  local attempt actual
+  local expected_line="pane report-metadata test-pane --source user:zsh-claude-display --agent claude --display-agent $expected"
+  local attempt actual record
   for attempt in {1..50}; do
     actual=$(<"$HERDR_CAPTURE")
-    [[ "$actual" == *"--display-agent $expected"* ]] && return 0
+    for record in ${(f)actual}; do
+      [[ "$record" == "$expected_line" ]] && return 0
+    done
     sleep 0.02
   done
   fail "$description"
@@ -133,6 +153,8 @@ load_functions() {
   for function_name in _label_herdr_agent gpt_code monet claude; do
     sed -n "/^${function_name}() {$/,/^}$/p" "$source_file"
   done > "$workdir/functions.zsh"
+  sed -i 's|^[[:space:]]*ANTHROPIC_AUTH_TOKEN=.*\\$|      ANTHROPIC_AUTH_TOKEN="${ANTHROPIC_AUTH_TOKEN:-}" \\|' \
+    "$workdir/functions.zsh"
   source "$workdir/functions.zsh"
 }
 
@@ -143,35 +165,35 @@ exercise_fake_store() {
 
   export HOME="$fake_home"
   export HERDR_PANE_ID=test-pane
-  export ANTHROPIC_AUTH_TOKEN=test-token
-  unset CLAUDE_CONFIG_DIR
+  reset_claude_environment
   load_functions "$source_file"
 
   : > "$HOME/.config/claude-other/projects/project/gpt-session.jsonl"
   reset_captures
   output=$(claude --resume gpt-session 'argument with spaces')
   capture=$(<"$CLAUDE_CAPTURE")
-  assert_contains "$source_name GPT config" \
+  assert_line "$source_name GPT config" \
     "config=$HOME/.config/claude-other/" "$capture"
-  assert_contains "$source_name GPT proxy" \
+  assert_line "$source_name GPT proxy" \
     'base=http://127.0.0.1:8317' "$capture"
-  assert_contains "$source_name GPT model environment" \
+  assert_line "$source_name GPT model environment" \
     'opus=gpt-5.6-sol' "$capture"
-  assert_contains "$source_name GPT MCP policy" 'mcp=false' "$capture"
-  assert_contains "$source_name GPT telemetry policy" 'telemetry=1' "$capture"
-  assert_contains "$source_name GPT traffic policy" 'traffic=1' "$capture"
-  assert_contains "$source_name GPT Sonnet mapping" 'sonnet=gpt-5.6-terra' "$capture"
-  assert_contains "$source_name GPT Haiku mapping" 'haiku=gpt-5.6-luna' "$capture"
-  assert_contains "$source_name GPT authentication" 'auth=set' "$capture"
-  assert_contains "$source_name GPT fixed model option" \
+  assert_line "$source_name GPT MCP policy" 'mcp=false' "$capture"
+  assert_line "$source_name GPT telemetry policy" 'telemetry=1' "$capture"
+  assert_line "$source_name GPT traffic policy" 'traffic=1' "$capture"
+  assert_line "$source_name GPT Sonnet mapping" 'sonnet=gpt-5.6-terra' "$capture"
+  assert_line "$source_name GPT Haiku mapping" 'haiku=gpt-5.6-luna' "$capture"
+  assert_line "$source_name GPT authentication" 'auth=expected' "$capture"
+  assert_line "$source_name GPT argument count" 'argc=5' "$capture"
+  assert_line "$source_name GPT fixed model option" \
     'arg1=7:--model' "$capture"
-  assert_contains "$source_name GPT fixed model value" \
+  assert_line "$source_name GPT fixed model value" \
     'arg2=11:gpt-5.6-sol' "$capture"
-  assert_contains "$source_name GPT resume flag" \
+  assert_line "$source_name GPT resume flag" \
     'arg3=8:--resume' "$capture"
-  assert_contains "$source_name GPT session ID" \
+  assert_line "$source_name GPT session ID" \
     'arg4=11:gpt-session' "$capture"
-  assert_contains "$source_name GPT argument boundary" \
+  assert_line "$source_name GPT argument boundary" \
     'arg5=20:argument with spaces' "$capture"
   assert_contains "$source_name GPT foreground color" '#c0caf5' "$output"
   assert_contains "$source_name GPT background color" '#24283b' "$output"
@@ -181,13 +203,14 @@ exercise_fake_store() {
   reset_captures
   output=$(claude --resume monet-session 'argument with spaces')
   capture=$(<"$CLAUDE_CAPTURE")
-  assert_contains "$source_name Monet config" \
+  assert_line "$source_name Monet config" \
     "config=$HOME/.config/claude-monet/" "$capture"
-  assert_contains "$source_name Monet keeps its own backend" $'base=\n' "$capture"
-  assert_not_contains "$source_name Monet has no GPT model option" '--model' "$capture"
-  assert_contains "$source_name Monet resume flag" 'arg1=8:--resume' "$capture"
-  assert_contains "$source_name Monet session ID" 'arg2=13:monet-session' "$capture"
-  assert_contains "$source_name Monet argument boundary" \
+  assert_line "$source_name Monet keeps its own backend" 'base=' "$capture"
+  assert_line "$source_name Monet authentication" 'auth=expected' "$capture"
+  assert_line "$source_name Monet argument count" 'argc=3' "$capture"
+  assert_line "$source_name Monet resume flag" 'arg1=8:--resume' "$capture"
+  assert_line "$source_name Monet session ID" 'arg2=13:monet-session' "$capture"
+  assert_line "$source_name Monet argument boundary" \
     'arg3=20:argument with spaces' "$capture"
   assert_contains "$source_name Monet foreground color" '#839395' "$output"
   assert_contains "$source_name Monet background color" '#001419' "$output"
@@ -197,10 +220,11 @@ exercise_fake_store() {
   reset_captures
   output=$(claude --resume primary-session)
   capture=$(<"$CLAUDE_CAPTURE")
-  assert_contains "$source_name primary config remains default" $'config=\n' "$capture"
-  assert_contains "$source_name primary resume flag" 'arg1=8:--resume' "$capture"
-  assert_contains "$source_name primary session ID" 'arg2=15:primary-session' "$capture"
-  assert_not_contains "$source_name primary has no GPT model option" '--model' "$capture"
+  assert_line "$source_name primary config remains default" 'config=' "$capture"
+  assert_line "$source_name primary authentication" 'auth=expected' "$capture"
+  assert_line "$source_name primary argument count" 'argc=2' "$capture"
+  assert_line "$source_name primary resume flag" 'arg1=8:--resume' "$capture"
+  assert_line "$source_name primary session ID" 'arg2=15:primary-session' "$capture"
   [[ -z "$output" ]] || fail "$source_name primary emitted launcher colors"
   assert_empty_file "$source_name primary reported a custom label" "$HERDR_CAPTURE"
 
@@ -209,11 +233,14 @@ exercise_fake_store() {
   output=$(claude --resume gpt-session)
   unset CLAUDE_CONFIG_DIR
   capture=$(<"$CLAUDE_CAPTURE")
-  assert_contains "$source_name explicit config is preserved" \
+  assert_line "$source_name explicit config is preserved" \
     "config=$HOME/custom-config" "$capture"
-  assert_contains "$source_name explicit config preserves arguments" \
+  assert_line "$source_name explicit config authentication" 'auth=expected' "$capture"
+  assert_line "$source_name explicit config argument count" 'argc=2' "$capture"
+  assert_line "$source_name explicit config preserves resume flag" \
     'arg1=8:--resume' "$capture"
-  assert_not_contains "$source_name explicit config has no GPT model option" '--model' "$capture"
+  assert_line "$source_name explicit config preserves session ID" \
+    'arg2=11:gpt-session' "$capture"
   [[ -z "$output" ]] || fail "$source_name explicit config emitted launcher colors"
   assert_empty_file "$source_name explicit config reported a custom label" "$HERDR_CAPTURE"
 
@@ -221,10 +248,13 @@ exercise_fake_store() {
   unset HERDR_PANE_ID
   output=$(claude --resume gpt-session)
   capture=$(<"$CLAUDE_CAPTURE")
-  assert_contains "$source_name non-Herdr call remains default" $'config=\n' "$capture"
-  assert_contains "$source_name non-Herdr call preserves arguments" \
+  assert_line "$source_name non-Herdr call remains default" 'config=' "$capture"
+  assert_line "$source_name non-Herdr authentication" 'auth=expected' "$capture"
+  assert_line "$source_name non-Herdr argument count" 'argc=2' "$capture"
+  assert_line "$source_name non-Herdr call preserves resume flag" \
     'arg1=8:--resume' "$capture"
-  assert_not_contains "$source_name non-Herdr call has no GPT model option" '--model' "$capture"
+  assert_line "$source_name non-Herdr call preserves session ID" \
+    'arg2=11:gpt-session' "$capture"
   [[ -z "$output" ]] || fail "$source_name non-Herdr call emitted launcher colors"
   export HERDR_PANE_ID=test-pane
 
@@ -242,10 +272,12 @@ exercise_fake_store() {
   reset_captures
   output=$(claude --resume '../gpt-session')
   capture=$(<"$CLAUDE_CAPTURE")
-  assert_contains "$source_name slash-containing ID is passed through" \
+  assert_line "$source_name slash-containing authentication" 'auth=expected' "$capture"
+  assert_line "$source_name slash-containing argument count" 'argc=2' "$capture"
+  assert_line "$source_name slash-containing resume flag" \
+    'arg1=8:--resume' "$capture"
+  assert_line "$source_name slash-containing ID is passed through" \
     'arg2=14:../gpt-session' "$capture"
-  assert_not_contains "$source_name slash-containing ID has no GPT model option" \
-    '--model' "$capture"
   [[ -z "$output" ]] || fail "$source_name slash-containing ID emitted launcher colors"
 }
 
@@ -261,25 +293,37 @@ exercise_real_store() {
 
   export HOME="$real_home"
   export HERDR_PANE_ID=test-pane
-  unset CLAUDE_CONFIG_DIR
+  reset_claude_environment
   load_functions "$active_zshrc"
 
   reset_captures
   claude --resume "$gpt_session" >/dev/null
   capture=$(<"$CLAUDE_CAPTURE")
-  assert_contains 'real GPT transcript selects GPT config' \
+  assert_line 'real GPT transcript selects GPT config' \
     "config=$real_home/.config/claude-other/" "$capture"
-  assert_contains 'real GPT transcript restores fixed model' \
+  assert_line 'real GPT transcript authentication' 'auth=expected' "$capture"
+  assert_line 'real GPT transcript argument count' 'argc=4' "$capture"
+  assert_line 'real GPT transcript restores fixed model' \
     'arg1=7:--model' "$capture"
+  assert_line 'real GPT transcript restores fixed model value' \
+    'arg2=11:gpt-5.6-sol' "$capture"
+  assert_line 'real GPT transcript preserves resume flag' \
+    'arg3=8:--resume' "$capture"
+  assert_line 'real GPT transcript preserves session ID' \
+    "arg4=36:$gpt_session" "$capture"
   wait_for_label 'real GPT transcript restores display label' gpt_code
 
   reset_captures
   claude --resume "$monet_session" >/dev/null
   capture=$(<"$CLAUDE_CAPTURE")
-  assert_contains 'real Monet transcript selects Monet config' \
+  assert_line 'real Monet transcript selects Monet config' \
     "config=$real_home/.config/claude-monet/" "$capture"
-  assert_contains 'real Monet transcript preserves resume flag' \
+  assert_line 'real Monet transcript authentication' 'auth=expected' "$capture"
+  assert_line 'real Monet transcript argument count' 'argc=2' "$capture"
+  assert_line 'real Monet transcript preserves resume flag' \
     'arg1=8:--resume' "$capture"
+  assert_line 'real Monet transcript preserves session ID' \
+    "arg2=36:$monet_session" "$capture"
   wait_for_label 'real Monet transcript restores display label' monet
 }
 
