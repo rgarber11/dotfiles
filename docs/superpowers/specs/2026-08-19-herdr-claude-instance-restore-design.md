@@ -51,7 +51,7 @@ The function intercepts only a command satisfying all of these conditions:
 2. `CLAUDE_CONFIG_DIR` is not already set.
 3. The arguments contain Herdr's native two-argument restore form, `--resume <session-id>`.
 
-Every other invocation executes the real Claude binary unchanged. The existing launcher behavior remains unchanged because each launcher's `env` command resolves the executable directly and already supplies `CLAUDE_CONFIG_DIR`; `gpt_code()` is updated only to consume the shared GPT environment definition.
+Every other invocation executes the real Claude binary unchanged. Existing launcher behavior and source remain unchanged because the dispatcher delegates a matched restore to the existing launcher function, and each launcher's `env` command resolves the external Claude executable rather than recursively invoking the Zsh function.
 
 ## Restore dispatch
 
@@ -74,32 +74,13 @@ The lookup is limited to intercepted Herdr restores. Normal Claude startup pays 
 
 ### GPT Code
 
-Before executing the real Claude binary, the dispatcher:
+For a GPT session, the dispatcher calls `gpt_code "$@"`. That existing launcher reapplies the `gpt_code` display metadata, emits its Herdr terminal colors, supplies the GPT configuration root and complete proxy/auth/model environment, prepends the fixed `--model gpt-5.6-sol` option, and forwards Herdr's original `--resume` argument and session ID exactly.
 
-1. Reapplies the `gpt_code` display metadata through the existing asynchronous `_label_herdr_agent` helper.
-2. Emits the same foreground and background terminal escape sequences as the existing Herdr launcher path.
-3. Executes Claude with the same environment used by `gpt_code()`:
-   - `CLAUDE_CONFIG_DIR="$HOME/.config/claude-other/"`
-   - `ANTHROPIC_BASE_URL="http://127.0.0.1:8317"`
-   - `ENABLE_CLAUDEAI_MCP_SERVERS=false`
-   - `DISABLE_TELEMETRY=1`
-   - `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`
-   - the caller's current `ANTHROPIC_AUTH_TOKEN`
-   - the existing GPT Opus, Sonnet, and Haiku model mappings
-4. Prepends the launcher's fixed `--model gpt-5.6-sol` option, then forwards Herdr's original `--resume` argument and session ID exactly.
-
-The GPT environment definition is shared between the ordinary launcher and restore dispatcher so the two paths cannot drift.
+Delegation keeps the ordinary and restored GPT launch contexts identical without duplicating environment assignments, including machine-local values present only in the active `~/.zshrc`.
 
 ### Monet
 
-Before executing the real Claude binary, the dispatcher:
-
-1. Reapplies the `monet` display metadata through `_label_herdr_agent`.
-2. Emits the same Monet terminal colors as the existing Herdr launcher path.
-3. Sets `CLAUDE_CONFIG_DIR="$HOME/.config/claude-monet/"`.
-4. Preserves Herdr's original arguments exactly.
-
-Monet's model, status line, plugins, theme, and account data continue to come from that configuration root.
+For a Monet session, the dispatcher calls `monet "$@"`. That existing launcher reapplies the `monet` display metadata, emits its Herdr terminal colors, selects `~/.config/claude-monet`, and forwards Herdr's original arguments exactly. Monet's model, status line, plugins, theme, and account data continue to come from that configuration root.
 
 ## Error handling and boundaries
 
@@ -127,4 +108,4 @@ Use an isolated Zsh behavioral harness with stubbed `claude`, `herdr`, and contr
 
 ## Risks
 
-A future launcher can drift if it adds environment outside the shared GPT context or introduces another Claude root without registering it. Keeping instance roots and their complete execution context together makes such additions explicit. The dispatcher intentionally depends on Claude's current `projects/<encoded-cwd>/<id>.jsonl` storage contract; the behavioral tests will detect a storage-layout change.
+A future launcher with another Claude root must register that root in the dispatcher. Delegating to the existing launcher functions prevents execution-context drift and avoids copying machine-local credentials into shared code or documentation. The dispatcher intentionally depends on Claude's current `projects/<encoded-cwd>/<id>.jsonl` storage contract; the behavioral tests will detect a storage-layout change.
