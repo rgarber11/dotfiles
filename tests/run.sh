@@ -102,6 +102,13 @@ echo "fasterfetch=$(command -v fasterfetch || echo none)"
 echo "fasterfetch_help=$(fasterfetch --help >/dev/null 2>&1 && echo ok || echo fail)"
 echo "fastfetch=$(command -v fastfetch || echo none)"
 echo "herdr=$(command -v herdr || echo none)"
+# The clipboard helper cannot be executed here the way fasterfetch is: it dials
+# the desktop portal, which does not exist in the test container, so running it
+# would block until nc gives up. Check the link and the exec bit instead -- the
+# two things the link table can actually get wrong -- and let the provider
+# assertion below cover the other half, that nvim is really pointed at it.
+echo "clipboard_helper=$(readlink -f ~/.local/bin/herdr-clipboard-paste || echo none)"
+echo "clipboard_helper_x=$([ -x ~/.local/bin/herdr-clipboard-paste ] && echo yes || echo no)"
 echo "zshrc=$(readlink -f ~/.zshrc || echo none)"
 echo "nvimcfg=$(readlink -f ~/.config/nvim || echo none)"
 # The dsp-base image sources its own /etc/zsh/dsp-base.zsh -- powerlevel10k and
@@ -170,8 +177,11 @@ assert_contains "bash identity beats the agent env" \
   "bash_ident=Richard Garber <9834847+rgarber11@users.noreply.github.com>" "$CHECKS"
 assert_not_contains "the wrong address never wins" "wrong@example.com" "$CHECKS"
 assert_contains "nvim uses catppuccin mocha in the workspace" "colorscheme=catppuccin-mocha" "$CHECKS"
+assert_contains "the clipboard helper symlinks into the repo" \
+  "clipboard_helper=/home/coder/.config/coderv2/dotfiles/bin/herdr-clipboard-paste" "$CHECKS"
+assert_contains "the clipboard helper is executable" "clipboard_helper_x=yes" "$CHECKS"
 assert_contains "headless Neovim uses the Herdr clipboard bridge" \
-  $'\nclipboard_provider=herdr-remote|function|nc 127.0.0.1 52052|0\n' \
+  $'\nclipboard_provider=herdr-remote|function|/home/coder/.local/bin/herdr-clipboard-paste|0\n' \
   $'\n'"$CHECKS"$'\n'
 assert_contains "login shell is zsh"      "shell=/usr/bin/zsh" "$FIRST"
 # assert_not_contains does a plain substring match, and "greeting=" is a
@@ -216,6 +226,15 @@ echo "nvimcfg=$(readlink -f ~/.config/nvim || echo none)"
 echo "backups=$(find ~ -maxdepth 1 -name '*.pre-dotfiles*' | wc -l)"
 echo "bashrc_blocks=$(grep -cF '# >>> dotfiles: coder git identity >>>' ~/.bashrc)"
 echo "profile_blocks=$(grep -cF '# >>> dotfiles: coder git identity >>>' ~/.profile)"
+# The PVC half of the clipboard bridge. Checked here rather than only after
+# the first install because a link that survives a restart is a different
+# claim from one that gets created: apply_links has to find its own link and
+# leave it alone, not back it up or orphan it.
+#
+# The /usr half (nc) cannot be checked from this container -- it has the same
+# home but a fresh /usr and never ran install.sh -- so it is asserted against
+# $SECOND below, the same way the first-install check uses $FIRST.
+echo "clipboard_helper=$(readlink -f ~/.local/bin/herdr-clipboard-paste || echo none)"
 SH
 )"
 echo "$AFTER"
@@ -225,6 +244,9 @@ assert_contains "zshrc symlink survived the restart" \
   "zshrc=/home/coder/.config/coderv2/dotfiles/headless/zshrc" "$AFTER"
 assert_contains "nvim config symlink survived the restart" \
   "nvimcfg=/home/coder/.config/coderv2/dotfiles/shared/nvim" "$AFTER"
+assert_contains "the clipboard helper survived the restart" \
+  "clipboard_helper=/home/coder/.config/coderv2/dotfiles/bin/herdr-clipboard-paste" "$AFTER"
+assert_not_contains "netcat reinstalled after the restart wiped /usr" "nc=none" "$SECOND"
 assert_contains "no duplicate backup on restart" "backups=1" "$AFTER"
 assert_contains "no duplicate bashrc block" "bashrc_blocks=1" "$AFTER"
 assert_contains "no duplicate profile block" "profile_blocks=1" "$AFTER"

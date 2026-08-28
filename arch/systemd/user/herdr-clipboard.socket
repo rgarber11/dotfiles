@@ -1,0 +1,19 @@
+[Unit]
+Description=Herdr remote clipboard responder
+Documentation=man:wl-paste(1)
+# Bound to the graphical session, not sockets.target: every connection runs
+# wl-paste, which needs the compositor's WAYLAND_DISPLAY. uwsm imports that
+# into the user manager's environment when Hyprland starts, so the responder
+# must not outlive -- or predate -- the session that gave it a clipboard.
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Socket]
+ListenStream=127.0.0.1:52052
+# One short-lived wl-paste per accepted connection, which is what makes a
+# paste read the clipboard as it is *now* rather than a value captured when
+# the listener started. This replaces socat's `reuseaddr,fork` + `SYSTEM:`.
+Accept=yes
+
+[Install]
+WantedBy=graphical-session.target

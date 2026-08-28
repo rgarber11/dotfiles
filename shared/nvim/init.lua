@@ -66,9 +66,18 @@ if headless then
       ['+'] = osc52.copy '+',
       ['*'] = osc52.copy '*',
     },
+    -- Reads go through the wrapper, not an inline `nc`, so the transport lives
+    -- in one file on the workspace instead of in nvim config on every
+    -- workspace. See bin/herdr-clipboard-paste.
+    --
+    -- An absolute path rather than a bare name: ~/.local/bin is put on PATH by
+    -- headless/zshrc, which only an interactive shell reads. An agent (or
+    -- anything else reaching in over a non-interactive channel) can launch
+    -- nvim with a PATH that never had it -- the same hazard that makes
+    -- headless/setup/50-shell.sh link herdr into /usr/local/bin.
     paste = {
-      ['+'] = { 'nc', '127.0.0.1', '52052' },
-      ['*'] = { 'nc', '127.0.0.1', '52052' },
+      ['+'] = { vim.fn.expand '~/.local/bin/herdr-clipboard-paste' },
+      ['*'] = { vim.fn.expand '~/.local/bin/herdr-clipboard-paste' },
     },
     cache_enabled = 0,
   }

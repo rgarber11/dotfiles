@@ -1,0 +1,15 @@
+[Unit]
+Description=Herdr clipboard read for %i
+
+[Service]
+# Default Type=simple, not oneshot: with Accept=yes systemd spawns one of
+# these per connection and hands it the socket, and simple is the type that
+# pairs with that.
+#
+# wl-paste writes the clipboard to stdout and exits, which closes the
+# connection and gives the workspace's `nc` its EOF. That is why the reader
+# side must not pass `nc -N` -- see bin/herdr-clipboard-paste.
+ExecStart=/usr/bin/wl-paste --no-newline
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal

@@ -183,154 +183,44 @@ claude() {
   command claude "$@"
 }
 
+# The clipboard portal is no longer built here. Two pieces own it now, and
+# neither is per-workspace: herdr-clipboard.socket answers on
+# 127.0.0.1:52052 for the whole graphical session, and the `Host *.coder`
+# stanza in ~/.ssh/config.d/herdr-clipboard.conf puts the reverse forward on
+# whichever connection reaches the workspace first -- this function's, or
+# herdr-mirror's daemon. A new workspace therefore needs no setup, and this
+# function shrank from ~150 lines to this: the socat responder, its readiness
+# log-scrape, the private ssh master, and three process groups' worth of
+# teardown all moved into systemd and ssh_config.
+#
+# What is left is worth keeping. The local responder is still checked before
+# herdr starts, because the alternative is a session that looks fine until
+# the first "+p silently returns nothing. The remote end is deliberately not
+# probed: the forward may legitimately be held by herdr-mirror rather than by
+# us, and there is no cheap way to tell "someone else already bound it"
+# (fine) from "nothing is listening" (broken) without a round trip.
 herdr_remote() {
   setopt localoptions
   setopt localtraps
   trap 'return 130' INT
-  local original_kitty_colors clipboard_server_log='' clipboard_server_pid='' clipboard_server_pgid=''
-  local clipboard_server_observed_pgid clipboard_server_ready=false clipboard_server_monitor=false
-  local clipboard_ssh_dir='' clipboard_ssh_socket='' clipboard_ssh_pid='' clipboard_ssh_pgid=''
-  local clipboard_ssh_observed_pgid clipboard_ssh_ready=false
-  [[ -o monitor ]] && clipboard_server_monitor=true
-  setopt nomonitor
+  local host=${1:-richard-worktree-2.coder}
+  local original_kitty_colors
+
+  # `start` on a socket unit returns once it is listening, so is-active
+  # immediately after is not a race. It is also idempotent, which is what
+  # lets this work whether or not the unit was enabled for the session.
+  if ! systemctl --user start herdr-clipboard.socket 2>/dev/null ||
+      ! systemctl --user --quiet is-active herdr-clipboard.socket; then
+    print -u2 'herdr_remote: clipboard responder is not listening on 127.0.0.1:52052'
+    print -u2 'herdr_remote: systemctl --user enable --now herdr-clipboard.socket'
+    return 1
+  fi
+
   original_kitty_colors=$(kitty @ get-colors) || return
   {
-    if ! clipboard_server_log=$(mktemp "${TMPDIR:-/tmp}/herdr_remote.XXXXXXXX" 2>/dev/null); then
-      print -u2 'herdr_remote: could not bind clipboard responder to 127.0.0.1:52052'
-      return 1
-    fi
-
-    setsid socat -d -d -lf "$clipboard_server_log" \
-      TCP4-LISTEN:52052,bind=127.0.0.1,reuseaddr,fork \
-      SYSTEM:'wl-paste --no-newline 2>/dev/null' >/dev/null 2>&1 &
-    clipboard_server_pid=$!
-    clipboard_server_pgid=$clipboard_server_pid
-    if [[ "$clipboard_server_monitor" == true ]]; then
-      setopt monitor
-    fi
-    clipboard_server_observed_pgid=$(ps -o pgid= -p "$clipboard_server_pid" 2>/dev/null)
-    clipboard_server_observed_pgid=${clipboard_server_observed_pgid//[[:space:]]/}
-
-    for _ in {1..20}; do
-      if ! kill -0 "$clipboard_server_pid" 2>/dev/null; then
-        break
-      fi
-      sleep 0.05
-      if ! kill -0 "$clipboard_server_pid" 2>/dev/null; then
-        break
-      fi
-
-      clipboard_server_observed_pgid=$(ps -o pgid= -p "$clipboard_server_pid" 2>/dev/null)
-      clipboard_server_observed_pgid=${clipboard_server_observed_pgid//[[:space:]]/}
-
-      if [[ "$clipboard_server_observed_pgid" == "$clipboard_server_pid" &&
-            "$(<"$clipboard_server_log")" == *"socat[$clipboard_server_pid] N listening on AF=2 127.0.0.1:52052"* ]]; then
-        clipboard_server_ready=true
-        break
-      fi
-    done
-
-    if [[ "$clipboard_server_ready" != true ]]; then
-      if [[ -n "$clipboard_server_pgid" ]] &&
-          kill -0 -- "-$clipboard_server_pgid" 2>/dev/null; then
-        kill -TERM -- "-$clipboard_server_pgid" 2>/dev/null
-      elif kill -0 "$clipboard_server_pid" 2>/dev/null; then
-        kill "$clipboard_server_pid" 2>/dev/null
-      fi
-      wait "$clipboard_server_pid" 2>/dev/null
-      rm -f -- "$clipboard_server_log"
-      clipboard_server_log=''
-      clipboard_server_pid=''
-      clipboard_server_pgid=''
-      print -u2 'herdr_remote: could not bind clipboard responder to 127.0.0.1:52052'
-      return 1
-    fi
-
-    if ! clipboard_ssh_dir=$(mktemp -d "${TMPDIR:-/tmp}/herdr_remote.ssh.XXXXXXXX" 2>/dev/null); then
-      print -u2 'herdr_remote: could not establish clipboard SSH tunnel'
-      return 1
-    fi
-    clipboard_ssh_socket="$clipboard_ssh_dir/control"
-
-    setopt nomonitor
-    setsid ssh -M -S "$clipboard_ssh_socket" -N -T -n \
-      -o ControlPersist=no \
-      -o ExitOnForwardFailure=yes \
-      -o ClearAllForwardings=yes \
-      richard-worktree-2.coder >/dev/null 2>&1 &
-    clipboard_ssh_pid=$!
-    clipboard_ssh_pgid=$clipboard_ssh_pid
-    if [[ "$clipboard_server_monitor" == true ]]; then
-      setopt monitor
-    fi
-
-    for _ in {1..240}; do
-      if ! kill -0 "$clipboard_ssh_pid" 2>/dev/null; then
-        break
-      fi
-      sleep 0.25
-      if ! kill -0 "$clipboard_ssh_pid" 2>/dev/null; then
-        break
-      fi
-      clipboard_ssh_observed_pgid=$(ps -o pgid= -p "$clipboard_ssh_pid" 2>/dev/null)
-      clipboard_ssh_observed_pgid=${clipboard_ssh_observed_pgid//[[:space:]]/}
-      if [[ "$clipboard_ssh_observed_pgid" == "$clipboard_ssh_pid" &&
-            -S "$clipboard_ssh_socket" ]] &&
-          ssh -S "$clipboard_ssh_socket" -O check richard-worktree-2.coder >/dev/null 2>&1; then
-        clipboard_ssh_ready=true
-        break
-      fi
-    done
-
-    if [[ "$clipboard_ssh_ready" != true ]]; then
-      print -u2 'herdr_remote: could not establish clipboard SSH tunnel'
-      return 1
-    fi
-
-    if ! ssh -S "$clipboard_ssh_socket" -O forward \
-        -R 127.0.0.1:52052:127.0.0.1:52052 \
-        richard-worktree-2.coder >/dev/null 2>&1; then
-      print -u2 'herdr_remote: could not establish clipboard SSH tunnel'
-      return 1
-    fi
-
     kitty @ set-colors '~/.config/kitty/kitty-themes/Catppuccin-Mocha.conf'
-    herdr --remote richard-worktree-2.coder
+    herdr --remote "$host"
   } always {
-    if [[ -n "$clipboard_ssh_socket" && -S "$clipboard_ssh_socket" ]]; then
-      ssh -S "$clipboard_ssh_socket" -O exit richard-worktree-2.coder >/dev/null 2>&1
-    fi
-    if [[ -n "$clipboard_ssh_pgid" ]] &&
-        kill -0 -- "-$clipboard_ssh_pgid" 2>/dev/null; then
-      kill -TERM -- "-$clipboard_ssh_pgid" 2>/dev/null
-    elif [[ -n "$clipboard_ssh_pid" ]] &&
-        kill -0 "$clipboard_ssh_pid" 2>/dev/null; then
-      kill "$clipboard_ssh_pid" 2>/dev/null
-    fi
-    if [[ -n "$clipboard_ssh_pid" ]]; then
-      wait "$clipboard_ssh_pid" 2>/dev/null
-    fi
-    if [[ -n "$clipboard_ssh_dir" && -n "$clipboard_ssh_socket" &&
-          "$clipboard_ssh_socket" == "$clipboard_ssh_dir/control" ]]; then
-      rm -f -- "$clipboard_ssh_socket" "$clipboard_ssh_socket".*(N)
-    fi
-    if [[ -n "$clipboard_ssh_dir" ]]; then
-      rmdir -- "$clipboard_ssh_dir" 2>/dev/null
-    fi
-
-    if [[ -n "$clipboard_server_pgid" ]] &&
-        kill -0 -- "-$clipboard_server_pgid" 2>/dev/null; then
-      kill -TERM -- "-$clipboard_server_pgid" 2>/dev/null
-    elif [[ -n "$clipboard_server_pid" ]] &&
-        kill -0 "$clipboard_server_pid" 2>/dev/null; then
-      kill "$clipboard_server_pid" 2>/dev/null
-    fi
-    if [[ -n "$clipboard_server_pid" ]]; then
-      wait "$clipboard_server_pid" 2>/dev/null
-    fi
-    if [[ -n "$clipboard_server_log" ]]; then
-      rm -f -- "$clipboard_server_log"
-    fi
     kitty @ set-colors <(print -r -- "$original_kitty_colors")
   }
 }

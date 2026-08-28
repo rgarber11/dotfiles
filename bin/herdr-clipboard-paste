@@ -1,0 +1,23 @@
+#!/bin/sh
+# Read the desktop's clipboard, from inside a Coder workspace.
+#
+# Neovim's headless clipboard provider (shared/nvim/init.lua) runs this for
+# `"+p`. On the desktop, a systemd socket unit listens on loopback 52052 and
+# runs `wl-paste` once per accepted connection; a per-workspace
+# herdr-portal@<host>.service reverse-forwards this workspace's loopback 52052
+# to it. So every invocation reads the desktop clipboard as it is right now,
+# not a value captured when anything started.
+#
+# This wrapper exists so the transport is not baked into nvim config. The port
+# is fixed today, but a workspace that has to negotiate one (two portals against
+# a single workspace, or something in the image already holding 52052) changes
+# this file alone -- rather than redeploying nvim config to every workspace.
+#
+# Deliberately no `nc -N`: Neovim closes provider stdin itself, and the desktop
+# responder closes the connection when wl-paste exits, so EOF already arrives.
+# Passing -N made the responder terminate before it returned any output.
+#
+# Nothing is retried and no failure is papered over. A dead portal must surface
+# as an empty register immediately, the same way the old inline `nc` did --
+# a hang here blocks the Neovim UI.
+exec nc 127.0.0.1 52052
