@@ -72,7 +72,13 @@ export PATH="$HOME/.local/bin:$PATH"
 echo "cli_proxy=$(command -v cli-proxy-api || echo none)"
 echo "cli_proxy_config=$(readlink -f ~/.config/cli-proxy-api/config.yaml || echo none)"
 echo "cli_proxy_ready=$(curl -fsS --max-time 5 -H 'Authorization: Bearer coder-local' http://127.0.0.1:8317/v1/models >/dev/null && echo yes || echo no)"
-echo "cli_proxy_pid=$(cat ~/.local/state/cli-proxy-api/server.pid 2>/dev/null || echo none)"
+cli_proxy_pid="$(cat ~/.local/state/cli-proxy-api/server.pid 2>/dev/null || echo none)"
+echo "cli_proxy_pid=$cli_proxy_pid"
+if [[ "$cli_proxy_pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$cli_proxy_pid" 2>/dev/null; then
+  echo "cli_proxy_pid_live=yes"
+else
+  echo "cli_proxy_pid_live=no"
+fi
 echo "claude_other_private=$(jq -r '[.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC,.env.CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL,.env.DISABLE_TELEMETRY,.env.DISABLE_ERROR_REPORTING,.env.DISABLE_FEEDBACK_COMMAND,.disableClaudeAiConnectors] | @tsv' ~/.claude-other/settings.json)"
 echo "nc=$(command -v nc || echo none)"
 REPO_STATUS_AFTER="$(git -C ~/.config/coderv2/dotfiles status --porcelain -uno | wc -l)"
@@ -224,8 +230,8 @@ assert_contains "CLIProxyAPI config links into the repo" \
   "cli_proxy_config=/home/coder/.config/coderv2/dotfiles/headless/cli-proxy-api.yaml" "$FIRST"
 assert_contains "CLIProxyAPI answers its authenticated loopback endpoint" \
   "cli_proxy_ready=yes" "$FIRST"
-assert_contains "CLIProxyAPI emits a process ID observation" "cli_proxy_pid=" "$FIRST"
-assert_not_contains "CLIProxyAPI records a process ID" "cli_proxy_pid=none" "$FIRST"
+assert_contains "CLIProxyAPI records a live numeric process ID" \
+  $'\ncli_proxy_pid_live=yes\n' $'\n'"$FIRST"$'\n'
 assert_contains "GPT profile keeps every privacy control" \
   $'\nclaude_other_private=1\t1\t1\t1\t1\ttrue\n' \
   $'\n'"$FIRST"$'\n'
