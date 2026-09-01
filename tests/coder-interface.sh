@@ -14,6 +14,8 @@ cleanup() {
   fi
   if [ -n "${FOREIGN_PID:-}" ]; then kill "$FOREIGN_PID" 2>/dev/null || true; fi
   if [ -n "${LOGIN_PID:-}" ]; then kill "$LOGIN_PID" 2>/dev/null || true; fi
+  if [ -n "${PUBLISH_PID:-}" ]; then kill "$PUBLISH_PID" 2>/dev/null || true; fi
+  if [ -n "${EARLY_START_PID:-}" ]; then kill "$EARLY_START_PID" 2>/dev/null || true; fi
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -147,6 +149,32 @@ fi
 printf '{"data":[],"object":"list"}\n'
 SH
 chmod +x "$fake_bin/curl"
+cat > "$fake_bin/mv" <<'SH'
+#!/usr/bin/env sh
+destination=
+for argument in "$@"; do destination=$argument; done
+if [ -e "$FAKE_PROXY_INTERRUPT_PUBLISH_FILE" ]; then
+  case "$destination" in
+    */server.pid)
+      kill -TERM "$PPID"
+      sleep 0.1
+      exit 143
+      ;;
+  esac
+fi
+exec /usr/bin/mv "$@"
+SH
+chmod +x "$fake_bin/mv"
+cat > "$fake_bin/nohup" <<'SH'
+#!/usr/bin/env sh
+if [ -e "$FAKE_PROXY_INTERRUPT_BEFORE_IDENTITY_FILE" ]; then
+  printf '%s\n' "$$" > "$FAKE_PROXY_EARLY_CHILD_PID_FILE"
+  kill -TERM "$PPID"
+  exec sleep 300
+fi
+exec /usr/bin/nohup "$@"
+SH
+chmod +x "$fake_bin/nohup"
 make_fake_proxy() {
   local version=$1
   FAKE_PROXY_EXPECTED_VERSION=$version
@@ -183,6 +211,9 @@ run_proxy_step() {
   FAKE_PROXY_UNHEALTHY_FILE="$TMP/proxy-unhealthy" \
   FAKE_PROXY_LOCK_STATUS_FILE="$TMP/proxy-lock-status" \
   FAKE_PROXY_KILL_DURING_PROBE_FILE="$TMP/proxy-kill-during-probe" \
+  FAKE_PROXY_INTERRUPT_PUBLISH_FILE="$TMP/proxy-interrupt-publish" \
+  FAKE_PROXY_INTERRUPT_BEFORE_IDENTITY_FILE="$TMP/proxy-interrupt-before-identity" \
+  FAKE_PROXY_EARLY_CHILD_PID_FILE="$TMP/proxy-early-child.pid" \
   bash -c '
     set -euo pipefail
     source "$DOTFILES_DIR/headless/setup/lib.sh"
@@ -365,6 +396,54 @@ else
   fail "upgrade still triggers the managed release install"
 fi
 
+
+touch "$TMP/proxy-interrupt-before-identity"
+early_interrupt_output="$(run_proxy_step 0 2>&1 || true)"
+EARLY_START_PID="$(cat "$TMP/proxy-early-child.pid")"
+if wait_dead "$EARLY_START_PID"; then
+  pass "pre-identity startup interruption stops the owned child"
+else
+  fail "pre-identity startup interruption stops the owned child"
+  kill "$EARLY_START_PID" 2>/dev/null || true
+  wait_dead "$EARLY_START_PID" || true
+fi
+if [ -e "$proxy_home/.local/state/cli-proxy-api/server.pid" ]; then
+  fail "pre-identity startup interruption leaves no PID metadata"
+else
+  pass "pre-identity startup interruption leaves no PID metadata"
+fi
+rm -f "$TMP/proxy-interrupt-before-identity"
+
+touch "$TMP/proxy-interrupt-publish"
+publish_interrupt_output="$(run_proxy_step 0 2>&1 || true)"
+PUBLISH_PID="$(cat "$TMP/proxy-child.pid")"
+if wait_dead "$PUBLISH_PID"; then
+  pass "interrupted PID publication stops the spawned child"
+else
+  fail "interrupted PID publication stops the spawned child"
+  kill "$PUBLISH_PID" 2>/dev/null || true
+  wait_dead "$PUBLISH_PID" || true
+fi
+if [ -e "$proxy_home/.local/state/cli-proxy-api/server.pid" ]; then
+  fail "interrupted PID publication leaves no installed PID metadata"
+else
+  pass "interrupted PID publication leaves no installed PID metadata"
+fi
+if compgen -G "$proxy_home/.local/state/cli-proxy-api/server.pid.tmp.*" >/dev/null; then
+  fail "interrupted PID publication removes temporary PID metadata"
+else
+  pass "interrupted PID publication removes temporary PID metadata"
+fi
+rm -f "$TMP/proxy-interrupt-publish"
+run_proxy_step 0
+publish_recovery_pid="$(cat "$proxy_home/.local/state/cli-proxy-api/server.pid")"
+assert_equal "setup after interrupted publication tracks the replacement child" \
+  "$publish_recovery_pid" "$(cat "$TMP/proxy-child.pid")"
+if kill -0 "$publish_recovery_pid" 2>/dev/null; then
+  pass "setup after interrupted publication starts one live tracked daemon"
+else
+  fail "setup after interrupted publication starts one live tracked daemon"
+fi
 
 zhome="$TMP/zsh-home"
 zbin="$TMP/zsh-bin"

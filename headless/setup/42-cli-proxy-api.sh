@@ -9,7 +9,7 @@ setup_cli_proxy_api_locked() {
   local state="$HOME/.local/state/cli-proxy-api"
   local pid_file="$state/server.pid"
   local log_file="$state/server.log"
-  local tag version url pid pid_tmp current_pid attempt ready=0
+  local tag version url pid current_pid attempt ready=0
 
   if [ "${UPGRADE:-0}" = 1 ] ||
       [ ! -x "$HOME/.local/bin/cli-proxy-api" ]; then
@@ -116,6 +116,63 @@ setup_cli_proxy_api_locked() {
     return 0
   }
 
+  start_proxy() (
+    local start_pid="" start_pid_tmp="$pid_file.tmp.$BASHPID"
+    local cleanup_owned=1 recorded_pid
+
+    start_proxy_cleanup() {
+      trap - EXIT HUP INT TERM
+      if [ "$cleanup_owned" = 1 ] && [ -n "$start_pid" ]; then
+        # Until this subshell reaps $!, that PID is its direct child and cannot
+        # be reused by an unrelated process, even before the child reaches exec.
+        if pid_is_alive "$start_pid"; then
+          kill -TERM "$start_pid" 2>/dev/null || true
+        fi
+        for attempt in $(seq 1 50); do
+          pid_is_alive "$start_pid" || break
+          sleep 0.1
+        done
+        if pid_is_alive "$start_pid"; then
+          kill -KILL "$start_pid" 2>/dev/null || true
+        fi
+        wait "$start_pid" 2>/dev/null || true
+        recorded_pid="$(cat "$pid_file" 2>/dev/null || true)"
+        if [ "$recorded_pid" = "$start_pid" ]; then
+          rm -f "$pid_file" 2>/dev/null || true
+        fi
+      fi
+      rm -f "$start_pid_tmp" 2>/dev/null || true
+      return 0
+    }
+
+    start_proxy_interrupted() {
+      trap - HUP INT TERM
+      exit 1
+    }
+
+    trap start_proxy_cleanup EXIT
+    trap start_proxy_interrupted HUP INT TERM
+    umask 077
+    (
+      exec {lock_fd}>&-
+      exec nohup "$HOME/.local/bin/cli-proxy-api" --config "$config"
+    ) > "$log_file" 2>&1 &
+    start_pid=$!
+
+    for attempt in $(seq 1 50); do
+      proxy_pid_is_ours "$start_pid" && break
+      pid_is_alive "$start_pid" || break
+      sleep 0.01
+    done
+    proxy_pid_is_ours "$start_pid" || return 1
+
+    printf '%s\n' "$start_pid" > "$start_pid_tmp" || return 1
+    mv "$start_pid_tmp" "$pid_file" || return 1
+    cleanup_owned=0
+    trap - EXIT HUP INT TERM
+    printf '%s\n' "$start_pid"
+  )
+
   current_pid="$(cat "$pid_file" 2>/dev/null || true)"
   if [ -n "$current_pid" ] && proxy_pid_is_ours "$current_pid"; then
     if [ "${UPGRADE:-0}" = 0 ] &&
@@ -138,17 +195,8 @@ setup_cli_proxy_api_locked() {
     fi
   fi
 
-  umask 077
-  (
-    exec {lock_fd}>&-
-    exec nohup "$HOME/.local/bin/cli-proxy-api" --config "$config"
-  ) > "$log_file" 2>&1 &
-  pid=$!
-  pid_tmp="$pid_file.tmp.$$"
-  if ! printf '%s\n' "$pid" > "$pid_tmp" || ! mv "$pid_tmp" "$pid_file"; then
-    rm -f "$pid_tmp" 2>/dev/null || true
-    stop_proxy "$pid" || true
-    warn "cli-proxy-api: could not record the proxy PID"
+  if ! pid="$(start_proxy)"; then
+    warn "cli-proxy-api: could not start and record the proxy PID"
     return 0
   fi
 
