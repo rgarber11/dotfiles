@@ -12,6 +12,7 @@ Bring the desktop Claude launch behavior into the Coder headless profile:
 - `gpt_code` launches the template-managed `claude-other` profile through a local CLIProxyAPI process.
 - Herdr shows different colors for Monet and GPT Code.
 - CLIProxyAPI starts on each workspace boot and keeps its own Codex OAuth login in shared user storage.
+- The GPT-backed Claude profile retains the desktop privacy settings that suppress Anthropic traffic and product features.
 
 This first change stays in the dotfiles repository. A later talos-home change will add CLIProxyAPI login and status operations to `coder/templates/*/ai-auth.sh` after the live path is proven.
 
@@ -25,6 +26,7 @@ Coder now supplies profile launchers in `/usr/local/bin`:
 - `claude-other` sets `CLAUDE_CONFIG_DIR="$HOME/.claude-other"` and runs `claude`.
 
 The template's `ai-auth sync` links `~/.claude`, `~/.claude-monet`, `~/.claude-other`, and `~/.codex` into the per-user `/mnt/user-state` mount. The headless zsh profile does not yet define the three launcher functions.
+The desktop GPT profile also stores privacy controls in `~/.config/claude-other/settings.json`. The Coder profile currently contains only `permissions.defaultMode = "auto"`, so invoking `/usr/local/bin/claude-other` directly would lose those controls.
 
 The Coder container has no systemd. PID 1 is `coder`, and `systemctl` is absent. A user service cannot own CLIProxyAPI.
 
@@ -50,6 +52,30 @@ cli-proxy-api --config "$HOME/.config/cli-proxy-api/config.yaml" --codex-device-
 ```
 
 CLIProxyAPI writes its provider credential into `/mnt/user-state/cli-proxy-api`. It watches that directory while running, so the service does not need a restart after login. Setup never reads, copies, or rewrites native `~/.codex/auth.json`. The two programs use different credential schemas and independent refresh-token state.
+
+## GPT profile privacy settings
+
+Add a headless setup step that atomically merges the privacy-only subset from the desktop profile into `~/.claude-other/settings.json`:
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL": "1",
+    "DISABLE_TELEMETRY": "1",
+    "DISABLE_ERROR_REPORTING": "1",
+    "DISABLE_FEEDBACK_COMMAND": "1"
+  },
+  "disableClaudeAiConnectors": true
+}
+```
+
+Run the merge on every headless install so these values remain enforced. Preserve `permissions.defaultMode`, user-added settings, and every unrelated key. Do not copy the desktop permission denies, sandbox or shell classification, Herdr hook path, Spec Base variables, Node proxy behavior, theme, plugins, or WebFetch behavior.
+
+If the file does not exist, start from an empty object. Write through a temporary file and rename it only after `jq` parses the result. Set mode `0600`. Invalid JSON or an unwritable profile produces a warning and leaves the existing file byte-for-byte unchanged; it does not abort dotfiles setup.
+
+The zsh environment repeats the traffic, telemetry, and Claude.ai MCP controls for the launched process. That overlap is intentional. The shared settings protect direct `claude-other` invocations and persist with the profile, while the wrapper environment protects `gpt_code` before Claude reads profile settings.
+
 
 ## Zsh behavior
 
@@ -102,6 +128,8 @@ A stale PID file is recoverable. A PID that belongs to another executable is lef
 
 The daemon log must not contain shell tracing or credential file contents. The tracked config contains no vendor token. Shared auth files retain the permissions written by CLIProxyAPI inside a mode `0700` directory.
 
+Privacy-setting failures follow the same rule. Never replace invalid JSON with defaults, and never discard settings added by the user or the Coder template.
+
 ## Verification
 
 Extend the existing container test to cover the permanent behavior:
@@ -110,12 +138,13 @@ Extend the existing container test to cover the permanent behavior:
 2. Run setup again and prove it reuses one process.
 3. Seed stale and foreign PID cases. Prove stale metadata recovers and a foreign process is never signaled.
 4. Exercise the upgrade path with a controlled replacement binary and prove the validated daemon restarts.
-5. Source `headless/zshrc` with fake `claude`, `claude-monet`, and `claude-other` commands. Assert exact argument forwarding and GPT proxy environment.
-6. Create isolated session stores and cover GPT dispatch, Monet dispatch, default fallthrough, path fallthrough, explicit `CLAUDE_CONFIG_DIR`, and duplicate-store failure.
-7. Set `HERDR_PANE_ID` with a fake `herdr` command and assert the display labels plus exact Gruvbox Dark and JetBrains Darcula foreground/background OSC sequences.
-8. Confirm a non-Herdr shell never invokes Kitty and still launches both profiles.
+5. Merge the privacy settings into missing, minimal, and populated `~/.claude-other/settings.json` files. Prove unrelated keys survive, required values override conflicting values, the result has mode `0600`, a second run is unchanged, and invalid JSON is untouched.
+6. Source `headless/zshrc` with fake `claude`, `claude-monet`, and `claude-other` commands. Assert exact argument forwarding and GPT proxy environment.
+7. Create isolated session stores and cover GPT dispatch, Monet dispatch, default fallthrough, path fallthrough, explicit `CLAUDE_CONFIG_DIR`, and duplicate-store failure.
+8. Set `HERDR_PANE_ID` with a fake `herdr` command and assert the display labels plus exact Gruvbox Dark and JetBrains Darcula foreground/background OSC sequences.
+9. Confirm a non-Herdr shell never invokes Kitty and still launches both profiles.
 
-After the automated checks pass, run the real headless installer in the Coder workspace, complete one CLIProxyAPI device login, call the authenticated models endpoint, and launch one real `gpt_code` prompt. Launch `monet` and resume one session from each alternate store to verify the actual Herdr path.
+After the automated checks pass, run the real headless installer in the Coder workspace and inspect the merged `~/.claude-other/settings.json` without printing credentials. Complete one CLIProxyAPI device login, call the authenticated models endpoint, and launch one real `gpt_code` prompt. Launch `monet` and resume one session from each alternate store to verify the actual Herdr path.
 
 ## Known risk
 
