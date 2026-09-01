@@ -11,7 +11,8 @@ setup_cli_proxy_api_locked() {
   local log_file="$state/server.log"
   local tag version url pid pid_tmp current_pid attempt ready=0
 
-  if needs_install cli-proxy-api; then
+  if [ "${UPGRADE:-0}" = 1 ] ||
+      [ ! -x "$HOME/.local/bin/cli-proxy-api" ]; then
     tag="$(latest_release_tag router-for-me/CLIProxyAPI)" || tag=""
     if [ -n "$tag" ]; then
       version="${tag#v}"
@@ -50,27 +51,55 @@ setup_cli_proxy_api_locked() {
     return 0
   }
 
-  proxy_pid_is_ours() {
-    local candidate=$1 executable="$HOME/.local/bin/cli-proxy-api"
-    local -a candidate_argv=()
-    local binary_index
-
+  pid_is_alive() {
+    local candidate=$1 stat_pid stat_comm stat_state stat_rest
     case "$candidate" in ''|*[!0-9]*) return 1 ;; esac
     kill -0 "$candidate" 2>/dev/null || return 1
+    read -r stat_pid stat_comm stat_state stat_rest < "/proc/$candidate/stat" ||
+      return 1
+    [ "$stat_state" != Z ]
+  }
+
+  proxy_pid_is_ours() {
+    local candidate=$1 executable="$HOME/.local/bin/cli-proxy-api"
+    local first_line interpreter candidate_exe interpreter_exe
+    local -a candidate_argv=() shebang_argv=()
+
+    pid_is_alive "$candidate" || return 1
     [ -r "/proc/$candidate/cmdline" ] || return 1
     mapfile -d '' -t candidate_argv < "/proc/$candidate/cmdline" || return 1
 
-    if [ "${#candidate_argv[@]}" -ge 1 ] && [ "${candidate_argv[0]}" = "$executable" ]; then
-      binary_index=0
-    elif [ "${#candidate_argv[@]}" -ge 2 ] && [ "${candidate_argv[1]}" = "$executable" ]; then
-      binary_index=1
+    if [ "${#candidate_argv[@]}" -eq 3 ] &&
+        [ "${candidate_argv[0]}" = "$executable" ]; then
+      :
+    elif [ "${#candidate_argv[@]}" -eq 4 ] &&
+        [ "${candidate_argv[1]}" = "$executable" ]; then
+      IFS= read -r first_line < "$executable" || return 1
+      case "$first_line" in '#!'*) ;; *) return 1 ;; esac
+      read -r -a shebang_argv <<< "${first_line#\#!}"
+      [ "${#shebang_argv[@]}" -ge 1 ] || return 1
+      if [ "${shebang_argv[0]##*/}" = env ]; then
+        [ "${#shebang_argv[@]}" -eq 2 ] || return 1
+        interpreter="$(command -v "${shebang_argv[1]}")" || return 1
+      else
+        [ "${#shebang_argv[@]}" -eq 1 ] || return 1
+        interpreter="${shebang_argv[0]}"
+      fi
+      candidate_exe="$(readlink -f "/proc/$candidate/exe")" || return 1
+      interpreter_exe="$(readlink -f "$interpreter")" || return 1
+      [ "$candidate_exe" = "$interpreter_exe" ] || return 1
     else
       return 1
     fi
 
-    [ "${#candidate_argv[@]}" -gt "$((binary_index + 2))" ] &&
-      [ "${candidate_argv[binary_index + 1]}" = --config ] &&
-      [ "${candidate_argv[binary_index + 2]}" = "$config" ]
+    [ "${candidate_argv[${#candidate_argv[@]} - 2]}" = --config ] &&
+      [ "${candidate_argv[${#candidate_argv[@]} - 1]}" = "$config" ]
+  }
+
+  proxy_endpoint_is_healthy() {
+    curl -fsS --max-time 2 \
+      -H 'Authorization: Bearer coder-local' \
+      http://127.0.0.1:8317/v1/models >/dev/null 2>&1
   }
 
   stop_proxy() {
@@ -78,7 +107,7 @@ setup_cli_proxy_api_locked() {
     proxy_pid_is_ours "$stop_pid" || return 1
     kill -TERM "$stop_pid" 2>/dev/null || true
     for attempt in $(seq 1 50); do
-      kill -0 "$stop_pid" 2>/dev/null || return 0
+      pid_is_alive "$stop_pid" || return 0
       sleep 0.1
     done
     if proxy_pid_is_ours "$stop_pid"; then
@@ -89,9 +118,14 @@ setup_cli_proxy_api_locked() {
 
   current_pid="$(cat "$pid_file" 2>/dev/null || true)"
   if [ -n "$current_pid" ] && proxy_pid_is_ours "$current_pid"; then
-    if [ "${UPGRADE:-0}" = 0 ]; then
+    if [ "${UPGRADE:-0}" = 0 ] &&
+        proxy_endpoint_is_healthy &&
+        proxy_pid_is_ours "$current_pid"; then
       info "cli-proxy-api: already running (pid $current_pid)"
       return 0
+    fi
+    if [ "${UPGRADE:-0}" = 0 ]; then
+      warn "cli-proxy-api: existing process is unhealthy; restarting it"
     fi
     stop_proxy "$current_pid" || true
   elif [ -n "$current_pid" ]; then
@@ -105,7 +139,10 @@ setup_cli_proxy_api_locked() {
   fi
 
   umask 077
-  nohup "$HOME/.local/bin/cli-proxy-api" --config "$config" > "$log_file" 2>&1 &
+  (
+    exec {lock_fd}>&-
+    exec nohup "$HOME/.local/bin/cli-proxy-api" --config "$config"
+  ) > "$log_file" 2>&1 &
   pid=$!
   pid_tmp="$pid_file.tmp.$$"
   if ! printf '%s\n' "$pid" > "$pid_tmp" || ! mv "$pid_tmp" "$pid_file"; then
@@ -116,19 +153,23 @@ setup_cli_proxy_api_locked() {
   fi
 
   for attempt in $(seq 1 50); do
-    if curl -fsS --max-time 2 \
-        -H 'Authorization: Bearer coder-local' \
-        http://127.0.0.1:8317/v1/models >/dev/null 2>&1; then
+    if pid_is_alive "$pid" &&
+        proxy_endpoint_is_healthy &&
+        pid_is_alive "$pid"; then
       ready=1
       break
     fi
-    kill -0 "$pid" 2>/dev/null || break
+    pid_is_alive "$pid" || break
     sleep 0.1
   done
   if [ "$ready" = 1 ]; then
     info "cli-proxy-api: ready on 127.0.0.1:8317 (pid $pid)"
   else
-    kill -0 "$pid" 2>/dev/null || rm -f "$pid_file"
+    if pid_is_alive "$pid"; then
+      stop_proxy "$pid" || true
+    fi
+    rm -f "$pid_file" ||
+      warn "cli-proxy-api: could not remove failed child PID metadata"
     warn "cli-proxy-api: did not become ready; see $log_file"
   fi
   return 0

@@ -13,6 +13,7 @@ cleanup() {
     case "$pid" in ''|*[!0-9]*) ;; *) kill "$pid" 2>/dev/null || true ;; esac
   fi
   if [ -n "${FOREIGN_PID:-}" ]; then kill "$FOREIGN_PID" 2>/dev/null || true; fi
+  if [ -n "${LOGIN_PID:-}" ]; then kill "$LOGIN_PID" 2>/dev/null || true; fi
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -131,9 +132,18 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 [ "$authenticated" = 1 ] && [ "$endpoint" = 1 ] || exit 1
+[ ! -e "$FAKE_PROXY_UNHEALTHY_FILE" ] || exit 1
 [ -f "$FAKE_PROXY_MARKER" ] &&
   [ "$(cat "$FAKE_PROXY_MARKER")" = "$FAKE_PROXY_EXPECTED_VERSION" ] ||
   exit 1
+if [ -e "$FAKE_PROXY_KILL_DURING_PROBE_FILE" ]; then
+  probe_pid="$(cat "$FAKE_PROXY_CHILD_PID_FILE")"
+  kill -TERM "$probe_pid"
+  for attempt in $(seq 1 100); do
+    kill -0 "$probe_pid" 2>/dev/null || break
+    sleep 0.02
+  done
+fi
 printf '{"data":[],"object":"list"}\n'
 SH
 chmod +x "$fake_bin/curl"
@@ -146,6 +156,14 @@ make_fake_proxy() {
 #!/usr/bin/env sh
 trap 'exit 0' TERM INT
 printf '%s\n' '$version' > "\$FAKE_PROXY_MARKER"
+printf '%s\n' "\$\$" > "\$FAKE_PROXY_CHILD_PID_FILE"
+lock_status=clean
+for fd in /proc/"\$\$"/fd/*; do
+  case "\$(readlink "\$fd" 2>/dev/null || true)" in
+    */setup.lock) lock_status=inherited ;;
+  esac
+done
+printf '%s\n' "\$lock_status" > "\$FAKE_PROXY_LOCK_STATUS_FILE"
 while :; do sleep 1; done
 EOF
   chmod +x "$target"
@@ -161,10 +179,14 @@ run_proxy_step() {
   PATH="$fake_bin:$proxy_home/.local/bin:/usr/bin:/bin" \
   FAKE_PROXY_MARKER="$TMP/proxy-version" \
   FAKE_PROXY_EXPECTED_VERSION="$FAKE_PROXY_EXPECTED_VERSION" \
+  FAKE_PROXY_CHILD_PID_FILE="$TMP/proxy-child.pid" \
+  FAKE_PROXY_UNHEALTHY_FILE="$TMP/proxy-unhealthy" \
+  FAKE_PROXY_LOCK_STATUS_FILE="$TMP/proxy-lock-status" \
+  FAKE_PROXY_KILL_DURING_PROBE_FILE="$TMP/proxy-kill-during-probe" \
   bash -c '
     set -euo pipefail
     source "$DOTFILES_DIR/headless/setup/lib.sh"
-    needs_install() { return 1; }
+    latest_release_tag() { return 0; }
     source "$DOTFILES_DIR/headless/setup/42-cli-proxy-api.sh"
   '
 }
@@ -214,5 +236,133 @@ case "$pid5" in "$pid4") fail "upgrade restarts the proxy" ;; *) pass "upgrade r
 wait_dead "$pid4"
 pass "upgrade stops the validated old proxy"
 assert_contains "upgrade starts the replacement binary" "v2" "$(cat "$TMP/proxy-version")"
+
+kill "$pid5"
+wait_dead "$pid5"
+FAKE_PROXY_MARKER="$TMP/proxy-version" \
+  FAKE_PROXY_CHILD_PID_FILE="$TMP/login-child.pid" \
+  FAKE_PROXY_LOCK_STATUS_FILE="$TMP/login-lock-status" \
+  "$proxy_home/.local/bin/cli-proxy-api" \
+  --config "$proxy_config" --codex-device-login >/dev/null 2>&1 &
+LOGIN_PID=$!
+printf '%s\n' "$LOGIN_PID" > "$proxy_home/.local/state/cli-proxy-api/server.pid"
+run_proxy_step 0
+login_replacement_pid="$(cat "$proxy_home/.local/state/cli-proxy-api/server.pid")"
+if kill -0 "$LOGIN_PID" 2>/dev/null; then
+  pass "login-mode process is not signaled"
+else
+  fail "login-mode process is not signaled"
+fi
+case "$login_replacement_pid" in
+  "$LOGIN_PID") fail "login-mode process is not reused as the daemon" ;;
+  *) pass "login-mode process is not reused as the daemon" ;;
+esac
+
+printf '%s\n' unhealthy > "$TMP/proxy-version"
+run_proxy_step 0
+unhealthy_replacement_pid="$(cat "$proxy_home/.local/state/cli-proxy-api/server.pid")"
+case "$unhealthy_replacement_pid" in
+  "$login_replacement_pid") fail "unhealthy matching daemon is restarted" ;;
+  *) pass "unhealthy matching daemon is restarted" ;;
+esac
+if wait_dead "$login_replacement_pid"; then
+  pass "unhealthy matching daemon is stopped"
+else
+  fail "unhealthy matching daemon is stopped"
+  kill "$login_replacement_pid" 2>/dev/null || true
+  wait_dead "$login_replacement_pid" || true
+  rm -f "$proxy_home/.local/state/cli-proxy-api/server.pid"
+  run_proxy_step 0
+fi
+
+
+kill "$unhealthy_replacement_pid"
+wait_dead "$unhealthy_replacement_pid"
+touch "$TMP/proxy-unhealthy"
+failed_start_output="$(run_proxy_step 0 2>&1)"
+failed_start_pid="$(cat "$TMP/proxy-child.pid")"
+assert_contains "live unready child reports a readiness warning" \
+  'did not become ready' "$failed_start_output"
+if [ -e "$proxy_home/.local/state/cli-proxy-api/server.pid" ]; then
+  fail "live unready child PID metadata is removed"
+else
+  pass "live unready child PID metadata is removed"
+fi
+if wait_dead "$failed_start_pid"; then
+  pass "live unready child is stopped"
+else
+  fail "live unready child is stopped"
+  kill "$failed_start_pid" 2>/dev/null || true
+  wait_dead "$failed_start_pid" || true
+fi
+rm -f "$TMP/proxy-unhealthy"
+run_proxy_step 0
+lock_test_pid="$(cat "$proxy_home/.local/state/cli-proxy-api/server.pid")"
+assert_equal "daemon child does not inherit the setup lock" \
+  clean "$(cat "$TMP/proxy-lock-status")"
+
+kill "$lock_test_pid"
+wait_dead "$lock_test_pid"
+touch "$TMP/proxy-kill-during-probe"
+probe_race_output="$(run_proxy_step 0 2>&1)"
+probe_race_pid="$(cat "$TMP/proxy-child.pid")"
+assert_contains "dead new child cannot pass readiness via another listener" \
+  'did not become ready' "$probe_race_output"
+if [ -e "$proxy_home/.local/state/cli-proxy-api/server.pid" ]; then
+  fail "dead probe-race child PID metadata is removed"
+else
+  pass "dead probe-race child PID metadata is removed"
+fi
+wait_dead "$probe_race_pid"
+pass "probe-race child is dead"
+rm -f "$TMP/proxy-kill-during-probe"
+
+cat > "$fake_bin/cli-proxy-api" <<'SH'
+#!/usr/bin/env sh
+exit 0
+SH
+chmod +x "$fake_bin/cli-proxy-api"
+run_install_probe() {
+  local home=$1 upgrade=$2 call_file=$3
+  HOME="$home" \
+  DOTFILES_DIR="$REPO" \
+  UPGRADE="$upgrade" \
+  PATH="$fake_bin:/usr/bin:/bin" \
+  INSTALL_CALL_FILE="$call_file" \
+  bash -c '
+    set -euo pipefail
+    source "$DOTFILES_DIR/headless/setup/lib.sh"
+    latest_release_tag() {
+      [ "$1" = router-for-me/CLIProxyAPI ]
+      printf "%s\n" v9
+    }
+    install_tarball() {
+      printf "%s|%s|%s|%s|%s\n" "$1" "$2" "$3" "$4" "$5" > "$INSTALL_CALL_FILE"
+    }
+    source "$DOTFILES_DIR/headless/setup/42-cli-proxy-api.sh"
+  ' >/dev/null 2>&1
+}
+
+missing_managed_home="$TMP/install-missing-managed"
+missing_managed_call="$TMP/install-missing-managed.call"
+run_install_probe "$missing_managed_home" 0 "$missing_managed_call"
+if [ -f "$missing_managed_call" ]; then
+  assert_equal "managed-path absence triggers the exact release install" \
+    'cli-proxy-api|v9|https://github.com/router-for-me/CLIProxyAPI/releases/download/v9/CLIProxyAPI_9_linux_amd64.tar.gz|cli-proxy-api|0' \
+    "$(cat "$missing_managed_call")"
+else
+  fail "managed-path absence triggers the exact release install"
+fi
+
+upgrade_install_home="$TMP/install-upgrade"
+mkdir -p "$upgrade_install_home/.local/bin"
+cp "$fake_bin/cli-proxy-api" "$upgrade_install_home/.local/bin/cli-proxy-api"
+upgrade_install_call="$TMP/install-upgrade.call"
+run_install_probe "$upgrade_install_home" 1 "$upgrade_install_call"
+if [ -f "$upgrade_install_call" ]; then
+  pass "upgrade still triggers the managed release install"
+else
+  fail "upgrade still triggers the managed release install"
+fi
 
 summary
