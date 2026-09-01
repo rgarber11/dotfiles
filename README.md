@@ -36,6 +36,8 @@ cli-proxy-api --config ~/.config/cli-proxy-api/config.yaml --codex-device-login 
 colors. `monet` is a thin `claude-monet` wrapper with JetBrains Darcula pane
 colors. `claude --resume <id>` searches both alternate session stores, then
 falls back to the default Claude store.
+All three launchers are standalone commands in `~/.local/bin`, so callers do
+not need to source an interactive zsh configuration.
 
 The `dsp-base` image ships a zsh setup of its own — powerlevel10k, the same five
 plugins, and copies of `shared/zsh/{options,functions}.zsh` — sourced from

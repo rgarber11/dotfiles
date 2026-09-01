@@ -314,11 +314,13 @@ vim.keymap.set('n', '<leader>ac', function()
   require('sidekick.cli').toggle { name = 'claude', focus = true }
 end, { desc = 'Sidekick Toggle Claude' })
 
-vim.keymap.set('i', '<M-l>', require('copilot.suggestion').accept, { desc = 'Accept Copilot Suggestion' })
-vim.keymap.set('i', '<M-;>', require('copilot.suggestion').accept_word, { desc = 'Accept Copilot Suggestion (Single Word)' })
-vim.keymap.set('i', '<M-]>', require('copilot.suggestion').next, { desc = 'Next Copilot Suggestion' })
-vim.keymap.set('i', '<M-[>', require('copilot.suggestion').next, { desc = 'Previous Copilot Suggestion' })
-vim.keymap.set('i', '<C-]>', require('copilot.suggestion').dismiss, { desc = 'Dismiss Copilot Suggestion' })
+vim.keymap.set('i', '<M-l>', require('neocodeium').accept, { desc = 'Accept Autocomplete Suggestion' })
+vim.keymap.set('i', '<M-;>', require('neocodeium').accept_word, { desc = 'Accept Autocomplete Suggestion (Single Word)' })
+vim.keymap.set('i', '<M-]>', require('neocodeium').cycle, { desc = 'Next Autocomplete Suggestion' })
+vim.keymap.set('i', '<M-[>', function()
+  require('neocodeium').cycle(-1)
+end, { desc = 'Previous Autocomplete Suggestion' })
+vim.keymap.set('i', '<C-]>', require('neocodeium').clear, { desc = 'Dismiss Autocomplete Suggestion' })
 
 -- Harpoon Keymaps
 local function harpoon_telescope(files)
@@ -452,7 +454,6 @@ vim.keymap.set({ 'c' }, '<c-s>', function()
   require('flash').toggle()
 end, { desc = 'Toggle Flash Search' })
 vim.api.nvim_create_user_command('DisableAI', function()
-  vim.cmd ':Copilot disable'
-  vim.cmd ':Sidekick nes disable'
+  vim.cmd ':NeoCodeium disable_buffer'
   vim.notify('AI Disabled', vim.log.levels.INFO)
 end, { desc = 'Disable all AI integrations' })

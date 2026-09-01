@@ -50,7 +50,6 @@ bindkey -M emacs '^N' history-substring-search-down
 
 # Re-resolve the latest nvim/difft/fastfetch, pull zsh plugins, update herdr.
 alias dotup="$HOME/dotfiles/install.sh --upgrade"
-source "$HOME/dotfiles/headless/claude.zsh"
 # OSC 52 compatible copy function (command piping)
 rcopy() {
   local encoded

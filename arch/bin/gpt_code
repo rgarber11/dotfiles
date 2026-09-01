@@ -1,0 +1,61 @@
+#!/usr/bin/env zsh
+
+_label_herdr_agent() {
+  local pane_id=$1
+  local display_label=$2
+  local attempt
+
+  for attempt in {1..50}; do
+    if herdr agent get "$pane_id" >/dev/null 2>&1 &&
+      herdr pane report-metadata "$pane_id" \
+        --source user:zsh-claude-display \
+        --agent claude \
+        --display-agent "$display_label" >/dev/null 2>&1; then
+      return
+    fi
+    sleep 0.1
+  done
+}
+
+gpt_code() {
+  local original_kitty_colors
+  local -a launch_command
+
+  if [[ -n ${HERDR_PANE_ID:-} ]]; then
+    _label_herdr_agent "$HERDR_PANE_ID" gpt_code &!
+    launch_command=(
+      sh -c
+      'printf "\033]10;#c0caf5\033\\"; printf "\033]11;#24283b\033\\"; exec "$@"'
+      sh
+      /opt/claude-code/bin/claude --model gpt-5.6-sol "$@"
+    )
+  else
+    original_kitty_colors=$(kitty @ get-colors) || return
+    launch_command=(/opt/claude-code/bin/claude --model gpt-5.6-sol "$@")
+  fi
+
+  {
+    if [[ -z ${HERDR_PANE_ID:-} ]]; then
+      kitty @ set-colors "~/.config/kitty/Tokyo Night Storm.conf"
+      kitty @ set-tab-title "GPT Code"
+    fi
+    env \
+      CLAUDE_CONFIG_DIR="$HOME/.config/claude-other/" \
+      ANTHROPIC_BASE_URL="http://127.0.0.1:8317" \
+      ENABLE_CLAUDEAI_MCP_SERVERS=false \
+      DISABLE_TELEMETRY=1 \
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+      ANTHROPIC_AUTH_TOKEN="${ANTHROPIC_AUTH_TOKEN:-}" \
+      ANTHROPIC_DEFAULT_OPUS_MODEL="gpt-5.6-sol" \
+      ANTHROPIC_DEFAULT_SONNET_MODEL="gpt-5.6-terra" \
+      ANTHROPIC_DEFAULT_HAIKU_MODEL="gpt-5.6-luna" \
+      "${launch_command[@]}"
+  } always {
+    if [[ -z ${HERDR_PANE_ID:-} ]]; then
+      kitty @ set-colors <(print -r -- "$original_kitty_colors")
+      kitty @ set-tab-title ""
+    fi
+  }
+}
+
+gpt_code "$@"

@@ -14,6 +14,9 @@
 .config/fontconfig             arch/fontconfig
 .clang-format                  editors/cpp/.clang-format
 .local/bin/fasterfetch          bin/fasterfetch
+.local/bin/claude               arch/bin/claude
+.local/bin/gpt_code             arch/bin/gpt_code
+.local/bin/monet                arch/bin/monet
 .config/systemd/user/herdr-clipboard.socket    arch/systemd/user/herdr-clipboard.socket
 .config/systemd/user/herdr-clipboard@.service  arch/systemd/user/herdr-clipboard@.service
 .ssh/config.d/herdr-clipboard.conf             arch/ssh/herdr-clipboard.conf

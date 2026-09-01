@@ -445,6 +445,28 @@ else
   fail "setup after interrupted publication starts one live tracked daemon"
 fi
 
+for profile in arch headless; do
+  for launcher in claude gpt_code monet; do
+    if [ -x "$REPO/$profile/bin/$launcher" ]; then
+      pass "$profile $launcher is a standalone executable"
+    else
+      fail "$profile $launcher is a standalone executable"
+    fi
+    assert_contains "$profile profile installs standalone $launcher" \
+      ".local/bin/$launcher" "$(cat "$REPO/profiles/$profile.links")"
+  done
+done
+if grep -Eq '^(claude|gpt_code|monet)\(\)' "$REPO/arch/zshrc"; then
+  fail "Arch zshrc does not define Claude launchers"
+else
+  pass "Arch zshrc does not define Claude launchers"
+fi
+if grep -q 'headless/claude\.zsh' "$REPO/headless/zshrc"; then
+  fail "headless zshrc does not source a Claude launcher module"
+else
+  pass "headless zshrc does not source a Claude launcher module"
+fi
+
 zhome="$TMP/zsh-home"
 zbin="$TMP/zsh-bin"
 zlog="$TMP/zsh-launch.log"
@@ -522,12 +544,14 @@ unset ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL
 unset ANTHROPIC_DEFAULT_HAIKU_MODEL CLAUDE_CONFIG_DIR
 
 run_claude_zsh() {
+  local launcher=$1
+  shift
   HOME="$zhome" \
-  PATH="$zbin:/usr/bin:/bin" \
+  PATH="$REPO/headless/bin:$zbin:/usr/bin:/bin" \
   CLAUDE_TEST_LOG="$zlog" \
   HERDR_TEST_LOG="$herdr_log" \
   KITTY_TEST_LOG="$kitty_log" \
-  zsh -fc 'source "$1"; shift; "$@"' zsh "$REPO/headless/claude.zsh" "$@"
+  "$REPO/headless/bin/$launcher" "$@"
 }
 wait_for_herdr_metadata() {
   local expected=$1 attempt contents

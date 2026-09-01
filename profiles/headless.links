@@ -8,3 +8,6 @@
 .clang-format                  editors/cpp/.clang-format
 .local/bin/fasterfetch          bin/fasterfetch
 .local/bin/herdr-clipboard-paste bin/herdr-clipboard-paste
+.local/bin/claude                headless/bin/claude
+.local/bin/gpt_code              headless/bin/gpt_code
+.local/bin/monet                 headless/bin/monet

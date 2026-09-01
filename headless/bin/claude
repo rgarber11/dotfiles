@@ -1,0 +1,45 @@
+#!/usr/bin/env zsh
+typeset -gr _CLAUDE_WRAPPER_PATH=${0:A}
+
+claude() {
+  if [[ -z ${CLAUDE_CONFIG_DIR:-} &&
+        ${1:-} == --resume &&
+        -n ${2:-} &&
+        ${2:-} != */* ]]; then
+    local session_id=$2
+    local -a gpt_sessions monet_sessions
+
+    gpt_sessions=(
+      "$HOME"/.claude-other/projects/*/"$session_id".jsonl(N)
+    )
+    monet_sessions=(
+      "$HOME"/.claude-monet/projects/*/"$session_id".jsonl(N)
+    )
+
+    if (( ${#gpt_sessions} && ${#monet_sessions} )); then
+      print -u2 -- "claude: session $session_id exists in both gpt_code and monet stores"
+      return 1
+    fi
+    if (( ${#gpt_sessions} )); then
+      gpt_code "$@"
+      return
+    fi
+    if (( ${#monet_sessions} )); then
+      monet "$@"
+      return
+    fi
+  fi
+
+  local directory
+  local -a external_path
+  for directory in $path; do
+    if [[ -x $directory/claude &&
+          $directory/claude -ef $_CLAUDE_WRAPPER_PATH ]]; then
+      continue
+    fi
+    external_path+=("$directory")
+  done
+  env PATH=${(j/:/)external_path} claude "$@"
+}
+
+claude "$@"

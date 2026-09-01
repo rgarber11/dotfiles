@@ -1,0 +1,38 @@
+#!/usr/bin/env zsh
+
+_label_herdr_agent() {
+  local pane_id=$1
+  local display_label=$2
+  local attempt
+
+  for attempt in {1..50}; do
+    if herdr agent get "$pane_id" >/dev/null 2>&1 &&
+      herdr pane report-metadata "$pane_id" \
+        --source user:zsh-claude-display \
+        --agent claude \
+        --display-agent "$display_label" >/dev/null 2>&1; then
+      return
+    fi
+    sleep 0.1
+  done
+}
+
+monet() {
+  local -a launch_command
+
+  if [[ -n ${HERDR_PANE_ID:-} ]]; then
+    _label_herdr_agent "$HERDR_PANE_ID" monet &!
+    launch_command=(
+      sh -c
+      'printf "\033]10;#adadad\033\\"; printf "\033]11;#202020\033\\"; exec "$@"'
+      sh
+      claude-monet "$@"
+    )
+  else
+    launch_command=(claude-monet "$@")
+  fi
+
+  "${launch_command[@]}"
+}
+
+monet "$@"
