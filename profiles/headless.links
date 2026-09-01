@@ -4,6 +4,7 @@
 .p10k.zsh                      shared/zsh/p10k.zsh
 .config/nvim                   shared/nvim
 .config/herdr/config.toml      headless/herdr.toml
+.config/cli-proxy-api/config.yaml headless/cli-proxy-api.yaml
 .clang-format                  editors/cpp/.clang-format
 .local/bin/fasterfetch          bin/fasterfetch
 .local/bin/herdr-clipboard-paste bin/herdr-clipboard-paste
