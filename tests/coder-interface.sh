@@ -365,4 +365,317 @@ else
   fail "upgrade still triggers the managed release install"
 fi
 
+
+zhome="$TMP/zsh-home"
+zbin="$TMP/zsh-bin"
+zlog="$TMP/zsh-launch.log"
+herdr_log="$TMP/herdr.log"
+kitty_log="$TMP/kitty.log"
+mkdir -p "$zhome/.claude-other/projects/p" "$zhome/.claude-monet/projects/p" "$zbin"
+for launcher in claude claude-other claude-monet; do
+  cat > "$zbin/$launcher" <<'SH'
+#!/usr/bin/env sh
+{
+  printf 'launcher=%s\n' "${0##*/}"
+  printf 'argc=%s\n' "$#"
+  argument_index=1
+  for argument do
+    printf 'arg%s=%s\n' "$argument_index" "$argument"
+    argument_index=$((argument_index + 1))
+  done
+  printf 'ANTHROPIC_BASE_URL=%s\n' "${ANTHROPIC_BASE_URL-}"
+  printf 'ANTHROPIC_AUTH_TOKEN=%s\n' "${ANTHROPIC_AUTH_TOKEN-}"
+  printf 'ENABLE_CLAUDEAI_MCP_SERVERS=%s\n' "${ENABLE_CLAUDEAI_MCP_SERVERS-}"
+  printf 'DISABLE_TELEMETRY=%s\n' "${DISABLE_TELEMETRY-}"
+  printf 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=%s\n' \
+    "${CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC-}"
+  printf 'ANTHROPIC_DEFAULT_OPUS_MODEL=%s\n' "${ANTHROPIC_DEFAULT_OPUS_MODEL-}"
+  printf 'ANTHROPIC_DEFAULT_SONNET_MODEL=%s\n' "${ANTHROPIC_DEFAULT_SONNET_MODEL-}"
+  printf 'ANTHROPIC_DEFAULT_HAIKU_MODEL=%s\n' "${ANTHROPIC_DEFAULT_HAIKU_MODEL-}"
+  printf 'CLAUDE_CONFIG_DIR=%s:%s\n' \
+    "${CLAUDE_CONFIG_DIR+x}" "${CLAUDE_CONFIG_DIR-}"
+} >> "$CLAUDE_TEST_LOG"
+exit "${CLAUDE_TEST_STATUS:-0}"
+SH
+  chmod +x "$zbin/$launcher"
+done
+cat > "$zbin/herdr" <<'SH'
+#!/usr/bin/env sh
+
+if [ "${1:-} ${2:-}" = "agent get" ] && [ -n "${HERDR_GET_STATE:-}" ]; then
+  get_attempts=0
+  if [ -f "$HERDR_GET_STATE" ]; then
+    get_attempts="$(cat "$HERDR_GET_STATE")"
+  fi
+  get_attempts=$((get_attempts + 1))
+  printf '%s\n' "$get_attempts" > "$HERDR_GET_STATE"
+  if [ "$get_attempts" -le "${HERDR_GET_FAILURES:-0}" ]; then
+    exit 1
+  fi
+fi
+
+if [ "${1:-} ${2:-}" = "pane report-metadata" ] &&
+  [ -n "${HERDR_REPORT_STATE:-}" ]; then
+  report_attempts=0
+  if [ -f "$HERDR_REPORT_STATE" ]; then
+    report_attempts="$(cat "$HERDR_REPORT_STATE")"
+  fi
+  report_attempts=$((report_attempts + 1))
+  printf '%s\n' "$report_attempts" > "$HERDR_REPORT_STATE"
+  if [ "$report_attempts" -le "${HERDR_REPORT_FAILURES:-0}" ]; then
+    exit 1
+  fi
+fi
+printf '%s\n' "$*" >> "$HERDR_TEST_LOG"
+
+exit 0
+SH
+cat > "$zbin/kitty" <<'SH'
+#!/usr/bin/env sh
+printf '%s\n' "$*" >> "$KITTY_TEST_LOG"
+exit 99
+SH
+chmod +x "$zbin/herdr" "$zbin/kitty"
+
+unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ENABLE_CLAUDEAI_MCP_SERVERS
+unset DISABLE_TELEMETRY CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
+unset ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL
+unset ANTHROPIC_DEFAULT_HAIKU_MODEL CLAUDE_CONFIG_DIR
+
+run_claude_zsh() {
+  HOME="$zhome" \
+  PATH="$zbin:/usr/bin:/bin" \
+  CLAUDE_TEST_LOG="$zlog" \
+  HERDR_TEST_LOG="$herdr_log" \
+  KITTY_TEST_LOG="$kitty_log" \
+  zsh -fc 'source "$1"; shift; "$@"' zsh "$REPO/headless/claude.zsh" "$@"
+}
+wait_for_herdr_metadata() {
+  local expected=$1 attempt contents
+  for attempt in $(seq 1 50); do
+    contents="$(cat "$herdr_log" 2>/dev/null || true)"
+    case "$contents" in
+      *"$expected"*) return 0 ;;
+    esac
+    sleep 0.02
+  done
+  return 1
+}
+
+: > "$zlog"
+: > "$herdr_log"
+: > "$kitty_log"
+gpt_output="$(HERDR_PANE_ID=pane-gpt run_claude_zsh gpt_code --verbose "two words")"
+assert_equal "gpt_code emits only the exact Gruvbox Dark OSC colors in Herdr" \
+  $'\033]10;#ebdbb2\033\\\033]11;#282828\033\\' "$gpt_output"
+assert_equal "gpt_code uses the generated profile launcher, arguments, and exact proxy environment" \
+  "launcher=claude-other
+argc=4
+arg1=--model
+arg2=gpt-5.6-sol
+arg3=--verbose
+arg4=two words
+ANTHROPIC_BASE_URL=http://127.0.0.1:8317
+ANTHROPIC_AUTH_TOKEN=coder-local
+ENABLE_CLAUDEAI_MCP_SERVERS=false
+DISABLE_TELEMETRY=1
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+ANTHROPIC_DEFAULT_OPUS_MODEL=gpt-5.6-sol
+ANTHROPIC_DEFAULT_SONNET_MODEL=gpt-5.6-terra
+ANTHROPIC_DEFAULT_HAIKU_MODEL=gpt-5.6-luna
+CLAUDE_CONFIG_DIR=:" \
+  "$(cat "$zlog")"
+if wait_for_herdr_metadata \
+  'pane report-metadata pane-gpt --source user:zsh-claude-display --agent claude --display-agent gpt_code'; then
+  pass "gpt_code reports exact Herdr display metadata"
+else
+  fail "gpt_code reports exact Herdr display metadata"
+fi
+
+: > "$zlog"
+: > "$herdr_log"
+monet_output="$(HERDR_PANE_ID=pane-monet run_claude_zsh monet --resume "monet session")"
+assert_equal "monet emits only the exact Darcula OSC colors in Herdr" \
+  $'\033]10;#adadad\033\\\033]11;#202020\033\\' "$monet_output"
+assert_equal "monet is a thin generated-profile launcher without reconstructed profile environment" \
+  "launcher=claude-monet
+argc=2
+arg1=--resume
+arg2=monet session
+ANTHROPIC_BASE_URL=
+ANTHROPIC_AUTH_TOKEN=
+ENABLE_CLAUDEAI_MCP_SERVERS=
+DISABLE_TELEMETRY=
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=
+ANTHROPIC_DEFAULT_OPUS_MODEL=
+ANTHROPIC_DEFAULT_SONNET_MODEL=
+ANTHROPIC_DEFAULT_HAIKU_MODEL=
+CLAUDE_CONFIG_DIR=:" \
+  "$(cat "$zlog")"
+if wait_for_herdr_metadata \
+  'pane report-metadata pane-monet --source user:zsh-claude-display --agent claude --display-agent monet'; then
+  pass "monet reports exact Herdr display metadata"
+else
+  fail "monet reports exact Herdr display metadata"
+fi
+
+herdr_get_state="$TMP/herdr-get-attempts"
+herdr_report_state="$TMP/herdr-report-attempts"
+rm -f "$herdr_get_state" "$herdr_report_state"
+: > "$herdr_log"
+HERDR_GET_FAILURES=2 \
+HERDR_REPORT_FAILURES=1 \
+HERDR_GET_STATE="$herdr_get_state" \
+HERDR_REPORT_STATE="$herdr_report_state" \
+HERDR_PANE_ID=pane-retry \
+  run_claude_zsh monet retry >/dev/null
+if wait_for_herdr_metadata \
+  'pane report-metadata pane-retry --source user:zsh-claude-display --agent claude --display-agent monet'; then
+  pass "Herdr metadata helper eventually reports after controlled failures"
+else
+  fail "Herdr metadata helper eventually reports after controlled failures"
+fi
+herdr_get_attempts="$(cat "$herdr_get_state" 2>/dev/null || printf 0)"
+herdr_report_attempts="$(cat "$herdr_report_state" 2>/dev/null || printf 0)"
+assert_equal "Herdr metadata helper retries failed agent detection" \
+  4 "$herdr_get_attempts"
+assert_equal "Herdr metadata helper retries failed metadata reports" \
+  2 "$herdr_report_attempts"
+
+: > "$zlog"
+touch "$zhome/.claude-other/projects/p/gpt-session.jsonl"
+run_claude_zsh claude --resume gpt-session --verbose
+assert_contains "GPT-only resume dispatch uses gpt_code with all arguments" \
+  "launcher=claude-other
+argc=5
+arg1=--model
+arg2=gpt-5.6-sol
+arg3=--resume
+arg4=gpt-session
+arg5=--verbose" "$(cat "$zlog")"
+
+: > "$zlog"
+touch "$zhome/.claude-monet/projects/p/monet-session.jsonl"
+run_claude_zsh claude --resume monet-session --verbose
+assert_contains "Monet-only resume dispatch uses monet with all arguments" \
+  "launcher=claude-monet
+argc=3
+arg1=--resume
+arg2=monet-session
+arg3=--verbose" "$(cat "$zlog")"
+
+if CLAUDE_TEST_STATUS=21 HERDR_PANE_ID= \
+  run_claude_zsh gpt_code status-direct >/dev/null; then
+  direct_gpt_status=0
+else
+  direct_gpt_status=$?
+fi
+assert_equal "direct gpt_code returns the generated launcher status" \
+  21 "$direct_gpt_status"
+
+if CLAUDE_TEST_STATUS=22 HERDR_PANE_ID= \
+  run_claude_zsh monet status-direct >/dev/null; then
+  direct_monet_status=0
+else
+  direct_monet_status=$?
+fi
+assert_equal "direct monet returns the generated launcher status" \
+  22 "$direct_monet_status"
+
+if CLAUDE_TEST_STATUS=23 HERDR_PANE_ID= \
+  run_claude_zsh claude --resume gpt-session >/dev/null; then
+  resumed_gpt_status=0
+else
+  resumed_gpt_status=$?
+fi
+assert_equal "GPT resume dispatch returns the generated launcher status" \
+  23 "$resumed_gpt_status"
+
+if CLAUDE_TEST_STATUS=24 HERDR_PANE_ID= \
+  run_claude_zsh claude --resume monet-session >/dev/null; then
+  resumed_monet_status=0
+else
+  resumed_monet_status=$?
+fi
+assert_equal "Monet resume dispatch returns the generated launcher status" \
+  24 "$resumed_monet_status"
+
+: > "$zlog"
+run_claude_zsh claude --resume default-session
+assert_contains "unknown resume ID falls through to external Claude" \
+  "launcher=claude
+argc=2
+arg1=--resume
+arg2=default-session" "$(cat "$zlog")"
+
+: > "$zlog"
+run_claude_zsh claude --resume project/session.jsonl
+assert_contains "resume path falls through to external Claude" \
+  "launcher=claude
+argc=2
+arg1=--resume
+arg2=project/session.jsonl" "$(cat "$zlog")"
+
+: > "$zlog"
+CLAUDE_CONFIG_DIR="$zhome/custom" run_claude_zsh claude --resume gpt-session
+assert_contains "explicit config dir bypasses resume dispatch" \
+  "launcher=claude
+argc=2
+arg1=--resume
+arg2=gpt-session" "$(cat "$zlog")"
+assert_contains "external Claude receives the explicit config dir unchanged" \
+  "CLAUDE_CONFIG_DIR=x:$zhome/custom" "$(cat "$zlog")"
+
+: > "$zlog"
+run_claude_zsh claude --verbose --resume gpt-session
+assert_contains "unsupported resume position falls through to external Claude" \
+  "launcher=claude
+argc=3
+arg1=--verbose
+arg2=--resume
+arg3=gpt-session" "$(cat "$zlog")"
+
+: > "$zlog"
+run_claude_zsh claude --resume
+assert_contains "empty resume ID falls through to external Claude" \
+  "launcher=claude
+argc=1
+arg1=--resume" "$(cat "$zlog")"
+
+touch "$zhome/.claude-monet/projects/p/collision.jsonl"
+touch "$zhome/.claude-other/projects/p/collision.jsonl"
+: > "$zlog"
+if run_claude_zsh claude --resume collision > "$TMP/collision.out" 2> "$TMP/collision.err"; then
+  fail "duplicate session stores fail"
+else
+  pass "duplicate session stores fail"
+fi
+assert_equal "duplicate session error clearly names both stores" \
+  'claude: session collision exists in both gpt_code and monet stores' \
+  "$(cat "$TMP/collision.err")"
+assert_equal "duplicate session stores do not launch Claude" "" "$(cat "$zlog")"
+
+: > "$zlog"
+plain_gpt_output="$(HERDR_PANE_ID= run_claude_zsh gpt_code plain)"
+assert_equal "non-Herdr gpt_code emits no OSC output" "" "$plain_gpt_output"
+assert_contains "non-Herdr gpt_code still uses the generated launcher" \
+  "launcher=claude-other
+argc=3
+arg1=--model
+arg2=gpt-5.6-sol
+arg3=plain" "$(cat "$zlog")"
+
+: > "$zlog"
+plain_monet_output="$(HERDR_PANE_ID= run_claude_zsh monet plain)"
+assert_equal "non-Herdr monet emits no OSC output" "" "$plain_monet_output"
+assert_contains "non-Herdr monet still uses the generated launcher" \
+  "launcher=claude-monet
+argc=1
+arg1=plain" "$(cat "$zlog")"
+if [ -s "$kitty_log" ]; then
+  fail "headless launchers never invoke Kitty"
+else
+  pass "headless launchers never invoke Kitty"
+fi
+
 summary
