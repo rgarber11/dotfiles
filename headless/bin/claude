@@ -10,7 +10,7 @@ claude() {
     local -a gpt_sessions monet_sessions
 
     gpt_sessions=(
-      "$HOME"/.claude-other/projects/*/"$session_id".jsonl(N)
+      "$HOME"/.claude-gpt/projects/*/"$session_id".jsonl(N)
     )
     monet_sessions=(
       "$HOME"/.claude-monet/projects/*/"$session_id".jsonl(N)

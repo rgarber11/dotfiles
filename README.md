@@ -18,26 +18,19 @@ coder update <workspace> --parameter dotfiles_uri=https://github.com/rgarber11/d
 ```
 
 `dotup` inside the workspace re-resolves the latest Neovim, difftastic,
-fastfetch, chafa, and CLIProxyAPI releases, pulls the zsh plugins, and runs
-`herdr update`. Every start otherwise touches the network only for apt to top
-up whatever `/usr` lost on restart.
+fastfetch, and chafa releases, pulls the zsh plugins, and runs `herdr update`.
+Every start otherwise touches the network only for apt to top up whatever
+`/usr` lost on restart.
 
-The headless profile installs `cli-proxy-api` at
-`~/.local/bin/cli-proxy-api`. Setup starts it on `127.0.0.1:8317` at every
-workspace boot. Its OAuth files live at `/mnt/user-state/cli-proxy-api` beside
-the ai-auth state and remain separate from native `~/.codex` authentication.
-Run this CLIProxyAPI device flow once per user:
+The Coder template owns CLIProxyAPI and the `gpt_code` launcher. Run
+`ai-auth cli-proxy login` once per user to configure it; use
+`ai-auth cli-proxy status` for diagnostics. This repo deliberately does not
+install, configure, or supervise a second proxy in headless workspaces.
 
-```sh
-cli-proxy-api --config ~/.config/cli-proxy-api/config.yaml --codex-device-login --no-browser
-```
-
-`gpt_code` runs `claude-other` through that proxy with Gruvbox Dark pane
-colors. `monet` is a thin `claude-monet` wrapper with JetBrains Darcula pane
-colors. `claude --resume <id>` searches both alternate session stores, then
-falls back to the default Claude store.
-All three launchers are standalone commands in `~/.local/bin`, so callers do
-not need to source an interactive zsh configuration.
+`monet` is a thin `claude-monet` wrapper with JetBrains Darcula pane colors.
+The headless profile installs `monet` and its `claude` resume dispatcher into
+`~/.local/bin`; `claude --resume <id>` checks the template-managed GPT store
+and the Monet store before falling back to the default Claude store.
 
 The `dsp-base` image ships a zsh setup of its own — powerlevel10k, the same five
 plugins, and copies of `shared/zsh/{options,functions}.zsh` — sourced from

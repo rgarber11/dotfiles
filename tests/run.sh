@@ -9,7 +9,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 IMAGE=dotfiles-test
 VOLUME=dotfiles-test-home
-USER_STATE_VOLUME=dotfiles-test-user-state
 # shellcheck source=tests/lib.sh
 source "$HERE/lib.sh"
 
@@ -17,9 +16,8 @@ case "${1:-}" in
   ""|--keep) ;;
   *) echo "run.sh: unknown argument: $1" >&2; exit 2 ;;
 esac
-[ "${1:-}" = "--keep" ] || podman volume rm -f "$VOLUME" "$USER_STATE_VOLUME" >/dev/null 2>&1 || true
+[ "${1:-}" = "--keep" ] || podman volume rm -f "$VOLUME" >/dev/null 2>&1 || true
 podman volume create "$VOLUME" >/dev/null 2>&1 || true
-podman volume create "$USER_STATE_VOLUME" >/dev/null 2>&1 || true
 podman build -q -t "$IMAGE" -f "$HERE/Containerfile" "$HERE" >/dev/null
 
 # Each invocation is a NEW container on the SAME volume: /usr resets, $HOME persists.
@@ -29,7 +27,6 @@ in_workspace() {
   # without these the test would pass even if the unset were missing entirely.
   podman run --rm -i \
     -v "$VOLUME:/home/coder" \
-    -v "$USER_STATE_VOLUME:/mnt/user-state" \
     -v "$REPO:/repo:ro" \
     -e CODER_AGENT_URL=http://fake.invalid \
     -e GIT_AUTHOR_NAME="Wrong Person" \
@@ -46,10 +43,6 @@ set -e
 mkdir -p ~/.config/coderv2
 rm -rf ~/.config/coderv2/dotfiles
 cp -r /repo ~/.config/coderv2/dotfiles
-sudo chown "$(id -u):$(id -g)" /mnt/user-state
-mkdir -p /mnt/user-state/claude/other
-[ -L ~/.claude-other ] || ln -s /mnt/user-state/claude/other ~/.claude-other
-[ -f ~/.claude-other/settings.json ] || printf '{"permissions":{"defaultMode":"auto"}}\n' > ~/.claude-other/settings.json
 ~/.config/coderv2/dotfiles/tests/coder-interface.sh
 # Measured right after the clone, before install.sh runs: catches install.sh
 # (or anything it runs, like `:Lazy update`) writing INTO the clone. A flat
@@ -69,17 +62,12 @@ chmod +x ~/.config/coderv2/dotfiles/install.sh
 [ -e ~/.zshrc ] || echo '# pre-existing user file' > ~/.zshrc
 ~/.config/coderv2/dotfiles/install.sh
 export PATH="$HOME/.local/bin:$PATH"
-echo "cli_proxy=$(command -v cli-proxy-api || echo none)"
-echo "cli_proxy_config=$(readlink -f ~/.config/cli-proxy-api/config.yaml || echo none)"
-echo "cli_proxy_ready=$(curl -fsS --max-time 5 -H 'Authorization: Bearer coder-local' http://127.0.0.1:8317/v1/models >/dev/null && echo yes || echo no)"
-cli_proxy_pid="$(cat ~/.local/state/cli-proxy-api/server.pid 2>/dev/null || echo none)"
-echo "cli_proxy_pid=$cli_proxy_pid"
-if [[ "$cli_proxy_pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$cli_proxy_pid" 2>/dev/null; then
-  echo "cli_proxy_pid_live=yes"
-else
-  echo "cli_proxy_pid_live=no"
-fi
-echo "claude_other_private=$(jq -r '[.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC,.env.CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL,.env.DISABLE_TELEMETRY,.env.DISABLE_ERROR_REPORTING,.env.DISABLE_FEEDBACK_COMMAND,.disableClaudeAiConnectors] | @tsv' ~/.claude-other/settings.json)"
+path_state() {
+  if [ -e "$1" ] || [ -L "$1" ]; then echo present; else echo absent; fi
+}
+echo "headless_gpt_link=$(path_state ~/.local/bin/gpt_code)"
+echo "headless_proxy_link=$(path_state ~/.local/bin/cli-proxy-api)"
+echo "headless_proxy_config=$(path_state ~/.config/cli-proxy-api/config.yaml)"
 echo "nc=$(command -v nc || echo none)"
 REPO_STATUS_AFTER="$(git -C ~/.config/coderv2/dotfiles status --porcelain -uno | wc -l)"
 echo "repo_status_delta=$((REPO_STATUS_AFTER - REPO_STATUS_BEFORE))"
@@ -224,17 +212,12 @@ assert_contains "matching history text is not highlighted" "history_highlight_fo
 assert_contains "missing history text is not highlighted" "history_highlight_not_found_empty=yes" "$CHECKS"
 assert_contains "pre-existing zshrc was backed up, not clobbered" "backups=1" "$CHECKS"
 assert_contains "install.sh does not modify the dotfiles clone" "repo_status_delta=0" "$FIRST"
-assert_contains "CLIProxyAPI installs under ~/.local" \
-  "cli_proxy=/home/coder/.local/bin/cli-proxy-api" "$FIRST"
-assert_contains "CLIProxyAPI config links into the repo" \
-  "cli_proxy_config=/home/coder/.config/coderv2/dotfiles/headless/cli-proxy-api.yaml" "$FIRST"
-assert_contains "CLIProxyAPI answers its authenticated loopback endpoint" \
-  "cli_proxy_ready=yes" "$FIRST"
-assert_contains "CLIProxyAPI records a live numeric process ID" \
-  $'\ncli_proxy_pid_live=yes\n' $'\n'"$FIRST"$'\n'
-assert_contains "GPT profile keeps every privacy control" \
-  $'\nclaude_other_private=1\t1\t1\t1\t1\ttrue\n' \
-  $'\n'"$FIRST"$'\n'
+assert_contains "headless install leaves gpt_code to the Coder template" \
+  "headless_gpt_link=absent" "$FIRST"
+assert_contains "headless install leaves CLIProxyAPI to the Coder template" \
+  "headless_proxy_link=absent" "$FIRST"
+assert_contains "headless install does not own the CLIProxyAPI config" \
+  "headless_proxy_config=absent" "$FIRST"
 
 echo
 echo "=== second install (new container, same home: simulates restart) ==="
@@ -248,13 +231,11 @@ assert_not_contains "difftastic not re-downloaded" "downloading difft"     "$SEC
 assert_not_contains "fastfetch not re-downloaded" "downloading fastfetch" "$SECOND"
 assert_not_contains "herdr not reinstalled"       "installing herdr"      "$SECOND"
 assert_contains "install.sh does not modify the dotfiles clone (restart)" "repo_status_delta=0" "$SECOND"
-assert_not_contains "CLIProxyAPI is not re-downloaded" "downloading cli-proxy-api" "$SECOND"
-assert_contains "CLIProxyAPI recovered the stale container PID" "cli_proxy_ready=yes" "$SECOND"
+assert_not_contains "headless restart does not install CLIProxyAPI" "downloading cli-proxy-api" "$SECOND"
 
 AFTER="$(in_workspace <<'SH'
 export PATH="$HOME/.local/bin:$PATH"
 echo "nvim=$(command -v nvim || echo none)"
-echo "cli_proxy=$(command -v cli-proxy-api || echo none)"
 echo "zshrc=$(readlink -f ~/.zshrc || echo none)"
 echo "nvimcfg=$(readlink -f ~/.config/nvim || echo none)"
 echo "backups=$(find ~ -maxdepth 1 -name '*.pre-dotfiles*' | wc -l)"
@@ -273,8 +254,6 @@ SH
 )"
 echo "$AFTER"
 assert_contains "nvim survived the restart" "nvim=/home/coder/.local/bin/nvim" "$AFTER"
-assert_contains "CLIProxyAPI survived the restart" \
-  "cli_proxy=/home/coder/.local/bin/cli-proxy-api" "$AFTER"
 assert_contains "chsh re-applied after restart" "shell=/usr/bin/zsh" "$SECOND"
 assert_contains "zshrc symlink survived the restart" \
   "zshrc=/home/coder/.config/coderv2/dotfiles/headless/zshrc" "$AFTER"

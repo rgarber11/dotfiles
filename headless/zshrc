@@ -51,9 +51,11 @@ bindkey -M emacs '^N' history-substring-search-down
 # Re-resolve the latest nvim/difft/fastfetch, pull zsh plugins, update herdr.
 alias dotup="$HOME/dotfiles/install.sh --upgrade"
 # OSC 52 compatible copy function (command piping)
+# Trailing newlines are dropped so pastes do not self-submit.
 rcopy() {
-  local encoded
-  encoded=$(base64 -w0) || return
+  local data encoded
+  data=$(cat) || return
+  encoded=$(printf '%s' "$data" | base64 -w0) || return
   printf '\e]52;c;%s\a' "$encoded" > /dev/tty
 }
 
