@@ -7,7 +7,12 @@
 # p10k's instant prompt treats any console output produced from here on as
 # suspect, right up until the real first prompt is drawn, so printing before
 # it starts monitoring avoids the warning entirely.
-export PATH="$HOME/.local/bin:$HOME/bin:$PATH:/usr/games"
+#
+# /mnt/user-state/tools/bin sits after ~/.local/bin and ahead of /usr/bin so
+# the claude wrapper in ~/.local/bin still wins the first lookup, and the
+# real binary it then re-execs is the persistent one on the user-state mount
+# rather than the image copy at /usr/bin/claude.
+export PATH="$HOME/.local/bin:$HOME/bin:/mnt/user-state/tools/bin:$PATH:/usr/games"
 source "$HOME/dotfiles/shared/zsh/functions.zsh"
 give_fortune
 
