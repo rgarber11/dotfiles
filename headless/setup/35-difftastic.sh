@@ -6,8 +6,9 @@ if needs_install difft; then
     warn "could not resolve a difftastic release; git diff.external will be broken"
   else
     # strip=0: the difftastic archive is flat, holding a bare `difft` binary.
+    # Asset names carry the version from 0.71.0 on (difft-<tag>-<target>).
     install_tarball difft "$tag" \
-      "https://github.com/Wilfred/difftastic/releases/download/$tag/difft-x86_64-unknown-linux-gnu.tar.gz" \
+      "https://github.com/Wilfred/difftastic/releases/download/$tag/difft-$tag-x86_64-unknown-linux-gnu.tar.gz" \
       "difft" 0 || warn "difftastic install failed"
   fi
 fi
