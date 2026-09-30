@@ -445,4 +445,108 @@ else
   pass "headless launchers never invoke Kitty"
 fi
 
+
+# T3 provider seeding. ai-auth is stubbed with the exact table layout the
+# template prints, including a "not logged in" row whose status also ends in
+# "logged in".
+run_t3_seed_step() {
+  local home=$1 command_path=${2:-$t3_bin:/usr/bin:/bin}
+  HOME="$home" REPO_UNDER_TEST="$REPO" PATH="$command_path" bash -c '
+      set -euo pipefail
+      source "$REPO_UNDER_TEST/headless/setup/lib.sh"
+      source "$REPO_UNDER_TEST/headless/setup/55-t3code-providers.sh"
+    '
+}
+t3_instances() {   # $1 = home; prints "id homePath displayName enabled" per instance
+  jq -r '.providerInstances // {} | to_entries[]
+    | "\(.key) \(.value.config.homePath) \(.value.displayName) \(.value.enabled)"' \
+    "$1/.t3/userdata/settings.json" | sort
+}
+
+t3_bin="$TMP/t3-bin"
+mkdir -p "$t3_bin"
+cat > "$t3_bin/ai-auth" <<'SH'
+#!/usr/bin/env sh
+[ "$*" = "claude list" ] || exit 2
+[ -e "${T3_AI_AUTH_FAIL:-/nonexistent}" ] && exit 1
+cat <<'TABLE'
+profile      command                account                      plan     status
+default      claude                 richard@voiceerp.ai          team     logged in
+monet        claude-monet           richard@voiceerp.ai          max      logged in
+other        claude-other           -                            -        not logged in
+shannon      claude-shannon         richard@laborbeam.com        max      logged in
+renamed      claude-renamed         richard@voiceerp.ai          max      logged in
+nohome       claude-nohome          richard@voiceerp.ai          max      logged in
+TABLE
+SH
+chmod +x "$t3_bin/ai-auth"
+
+t3_home="$TMP/t3-home"
+mkdir -p "$t3_home/.t3/userdata"
+for profile in monet other shannon renamed; do mkdir -p "$t3_home/.claude-$profile"; done
+cat > "$t3_home/.t3/userdata/settings.json" <<'JSON'
+{
+  "providers": { "cursor": { "enabled": false } },
+  "providerInstances": {
+    "claudeAgent_monet": {
+      "driver": "claudeAgent", "displayName": "My Monet", "enabled": false,
+      "config": { "homePath": "~/.claude-monet" }
+    },
+    "claude_custom": {
+      "driver": "claudeAgent", "displayName": "Custom", "enabled": true,
+      "config": { "homePath": "~/.claude-renamed" }
+    }
+  }
+}
+JSON
+run_t3_seed_step "$t3_home"
+assert_equal "T3 seeding adds only missing logged-in ai-auth profiles" \
+  "claudeAgent_monet ~/.claude-monet My Monet false
+claudeAgent_shannon ~/.claude-shannon Shannon true
+claude_custom ~/.claude-renamed Custom true" "$(t3_instances "$t3_home")"
+assert_equal "T3 seeding keeps unrelated settings" \
+  false "$(jq -r '.providers.cursor.enabled' "$t3_home/.t3/userdata/settings.json")"
+assert_equal "T3 seeded instances use the claudeAgent driver" \
+  claudeAgent "$(jq -r '.providerInstances.claudeAgent_shannon.driver' "$t3_home/.t3/userdata/settings.json")"
+
+t3_before="$(cat "$t3_home/.t3/userdata/settings.json")"
+t3_second="$(run_t3_seed_step "$t3_home" 2>&1)"
+assert_equal "T3 seeding is idempotent" \
+  "$t3_before" "$(cat "$t3_home/.t3/userdata/settings.json")"
+assert_not_contains "T3 seeding reports nothing when nothing changed" "t3:" "$t3_second"
+
+t3_fresh="$TMP/t3-fresh"
+mkdir -p "$t3_fresh/.claude-shannon"
+run_t3_seed_step "$t3_fresh"
+assert_equal "T3 seeding creates settings on a fresh home" \
+  "claudeAgent_shannon ~/.claude-shannon Shannon true" "$(t3_instances "$t3_fresh")"
+
+t3_noauth="$TMP/t3-noauth"
+mkdir -p "$t3_noauth/.claude-shannon"
+run_t3_seed_step "$t3_noauth" /usr/bin:/bin
+assert_path_absent "T3 seeding without ai-auth writes nothing" \
+  "$t3_noauth/.t3/userdata/settings.json"
+
+touch "$TMP/t3-ai-auth-fail"
+t3_failhome="$TMP/t3-failhome"
+mkdir -p "$t3_failhome/.claude-shannon"
+if T3_AI_AUTH_FAIL="$TMP/t3-ai-auth-fail" run_t3_seed_step "$t3_failhome" 2>/dev/null; then
+  pass "a failing ai-auth does not abort install.sh"
+else
+  fail "a failing ai-auth does not abort install.sh"
+fi
+assert_path_absent "a failing ai-auth writes nothing" \
+  "$t3_failhome/.t3/userdata/settings.json"
+
+t3_badjson="$TMP/t3-badjson"
+mkdir -p "$t3_badjson/.t3/userdata" "$t3_badjson/.claude-shannon"
+printf '{ not json' > "$t3_badjson/.t3/userdata/settings.json"
+if run_t3_seed_step "$t3_badjson" 2>/dev/null; then
+  pass "unreadable T3 settings do not abort install.sh"
+else
+  fail "unreadable T3 settings do not abort install.sh"
+fi
+assert_equal "unreadable T3 settings are left untouched" \
+  '{ not json' "$(cat "$t3_badjson/.t3/userdata/settings.json")"
+
 summary

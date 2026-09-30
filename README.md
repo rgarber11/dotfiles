@@ -37,6 +37,12 @@ workspace, then open `<that URL>/pair#token=<token>`, because the URL `t3 pair`
 prints points at the pod IP. `dotup` upgrades `t3` but leaves a running server
 alone, so the new build takes over on the next workspace start.
 
+Before the server starts, `headless/setup/55-t3code-providers.sh` adds a T3
+Claude provider instance for each non-default profile that
+`ai-auth claude list` shows as logged in, pointed at `~/.claude-<name>`. It
+only adds missing instances, so renames and disables made in the T3 UI stick. A
+deleted instance comes back on the next start, so disable it instead.
+
 `monet` is a thin `claude-monet` wrapper with JetBrains Darcula pane colors.
 The headless profile installs `monet` and its `claude` resume dispatcher into
 `~/.local/bin`; `claude --resume <id>` checks the template-managed GPT store
