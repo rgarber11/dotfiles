@@ -27,6 +27,16 @@ The Coder template owns CLIProxyAPI and the `gpt_code` launcher. Run
 `ai-auth cli-proxy status` for diagnostics. This repo deliberately does not
 install, configure, or supervise a second proxy in headless workspaces.
 
+T3 Code starts with the workspace: `headless/setup/60-t3code.sh` installs `t3`
+into `~/.local` with npm and runs `t3 serve --host 0.0.0.0 --port 3773` detached,
+logging to `~/.local/state/t3code/serve.log`. It does not use Tailscale or T3
+Connect. Reach it through Coder: open port 3773 from the workspace's port list
+in the dashboard, or run `coder port-forward <workspace> --tcp 3773:3773` and
+use `http://localhost:3773`. Pair each browser once. Run `t3 pair` in the
+workspace, then open `<that URL>/pair#token=<token>`, because the URL `t3 pair`
+prints points at the pod IP. `dotup` upgrades `t3` but leaves a running server
+alone, so the new build takes over on the next workspace start.
+
 `monet` is a thin `claude-monet` wrapper with JetBrains Darcula pane colors.
 The headless profile installs `monet` and its `claude` resume dispatcher into
 `~/.local/bin`; `claude --resume <id>` checks the template-managed GPT store
