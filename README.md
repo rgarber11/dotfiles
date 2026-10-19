@@ -27,21 +27,33 @@ The Coder template owns CLIProxyAPI and the `gpt_code` launcher. Run
 `ai-auth cli-proxy status` for diagnostics. This repo deliberately does not
 install, configure, or supervise a second proxy in headless workspaces.
 
-T3 Code starts with the workspace: `headless/setup/60-t3code.sh` installs `t3`
-into `~/.local` with npm and runs `t3 serve --host 0.0.0.0 --port 3773` detached,
-logging to `~/.local/state/t3code/serve.log`. It does not use Tailscale or T3
-Connect. Reach it through Coder: open port 3773 from the workspace's port list
+T3 Code starts with the workspace: `headless/setup/60-t3code.sh` installs the
+nightly `t3` (`t3@nightly`) into `~/.local` with npm, replacing a stable build
+already there. Each start asks npm for the newest nightly and reinstalls when it
+differs from the installed one, so a restart always serves the latest build; if
+npm can't be reached, the installed build keeps running. It then runs
+`t3 serve --host 0.0.0.0 --port 3773` detached, logging to
+`~/.local/state/t3code/serve.log`. It does not use Tailscale or T3 Connect. Reach it through Coder: open port 3773 from the workspace's port list
 in the dashboard, or run `coder port-forward <workspace> --tcp 3773:3773` and
 use `http://localhost:3773`. Pair each browser once. Run `t3 pair` in the
 workspace, then open `<that URL>/pair#token=<token>`, because the URL `t3 pair`
-prints points at the pod IP. `dotup` upgrades `t3` but leaves a running server
-alone, so the new build takes over on the next workspace start.
+prints points at the pod IP. `dotup` upgrades `t3` to the newest nightly but
+leaves a running server alone, so the new build takes over on the next
+workspace start.
 
 Before the server starts, `headless/setup/55-t3code-providers.sh` adds a T3
 Claude provider instance for each non-default profile that
 `ai-auth claude list` shows as logged in, pointed at `~/.claude-<name>`. It
 only adds missing instances, so renames and disables made in the T3 UI stick. A
 deleted instance comes back on the next start, so disable it instead.
+
+`headless/setup/65-t3code-projects.sh` adds every checkout in `~/workspace`
+whose origin is a `PhoeniciaLabsOrg` repo as a T3 project: dsp-base, plus the
+siblings when `clone_org_repos` is on. A detached waiter holds off until the
+template's own setup is done (dsp-base checked out and
+`~/.config/dsp/setup-running` gone), then adds them, logging to
+`~/.local/state/t3code/projects.log`. A project removed in the T3 UI comes back
+on the next start.
 
 `monet` is a thin `claude-monet` wrapper with JetBrains Darcula pane colors.
 The headless profile installs `monet` and its `claude` resume dispatcher into

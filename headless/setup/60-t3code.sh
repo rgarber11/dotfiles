@@ -4,23 +4,59 @@
 #
 # Installed into ~/.local with npm, the same way 10-packages.sh installs
 # tree-sitter-cli, rather than run as `npx t3 serve` each start: ~/.local is
-# the PVC, so this installs once and the startup path stays off the network.
-# --upgrade (dotup) re-resolves the latest release.
+# the PVC, so the package itself is only downloaded when it changes.
+# This tracks the nightly channel (npm dist-tag `nightly`), not `latest`.
+# Every start asks npm which build `nightly` points at and reinstalls when it
+# differs from the one on the PVC, so a restart always serves the newest
+# nightly. Nightlies land about daily, so a lookup on every start is the only
+# way to stay current. If npm can't be reached, the installed build keeps
+# running. A stable build left on the PVC by an earlier version of this script
+# is replaced on the next start.
 #
 # Upstream's `t3 service install` is not used because it supports only systemd
 # and launchd, and a Coder workspace container has neither.
 
-start_t3code() {
-  local port=3773 state="$HOME/.local/state/t3code" log
+# Version of the t3 in ~/.local, or nothing. Read from the package's own
+# manifest rather than `t3 --version`, which would start the CLI on every boot.
+# Always returns 0, for the same reason as latest_release_tag in lib.sh.
+_t3code_installed_version() {
+  sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' \
+    "$HOME/.local/lib/node_modules/t3/package.json" 2>/dev/null | head -1
+  return 0
+}
 
-  if needs_install t3; then
-    if command -v npm >/dev/null 2>&1; then
-      info "npm: installing t3 into ~/.local"
-      npm install -g --prefix "$HOME/.local" t3@latest >/dev/null 2>&1 ||
-        warn "t3 install failed"
-    else
-      warn "npm not found; skipping T3 Code"
+# Version the `nightly` dist-tag points at, or nothing when npm is unreachable.
+_t3code_latest_nightly() {
+  timeout 20 npm view t3@nightly version 2>/dev/null | tail -1
+  return 0
+}
+
+start_t3code() {
+  local port=${T3CODE_PORT:-3773} state="$HOME/.local/state/t3code" log installed=0
+  local have want reason=""
+
+  if command -v npm >/dev/null 2>&1; then
+    have="$(_t3code_installed_version)"
+    want="$(_t3code_latest_nightly)"
+    if needs_install t3 || [ -z "$have" ]; then
+      reason="installing t3@nightly"
+    elif [ -n "$want" ] && [ "$want" != "$have" ]; then
+      reason="updating t3 $have -> $want"
+    elif [ -z "$want" ] && [[ "$have" != *-nightly.* ]]; then
+      reason="replacing t3 $have with t3@nightly"
+    elif [ -z "$want" ]; then
+      warn "t3: could not look up the newest nightly; keeping $have"
     fi
+    if [ -n "$reason" ]; then
+      info "npm: $reason into ~/.local"
+      if npm install -g --prefix "$HOME/.local" "t3@${want:-nightly}" >/dev/null 2>&1; then
+        installed=1
+      else
+        warn "t3 install failed"
+      fi
+    fi
+  elif needs_install t3; then
+    warn "npm not found; skipping T3 Code"
   fi
   command -v t3 >/dev/null 2>&1 || return 0
 
@@ -31,7 +67,7 @@ start_t3code() {
   # are in flight.
   if _t3code_listening; then
     info "t3: port $port is already in use; not starting another server"
-    [ "${UPGRADE:-0}" = 1 ] && info "t3: restart the workspace to run the upgraded build"
+    [ "$installed" = 1 ] && info "t3: restart the workspace to run the newly installed build"
     return 0
   fi
 
