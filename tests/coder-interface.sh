@@ -790,4 +790,46 @@ assert_equal "a stable build is replaced even when the registry lookup fails" \
 
 kill "$T3UP_LISTENER_PID" 2>/dev/null || true
 
+# acli login. A stub already in ~/.local/bin keeps the step off the network;
+# it records its argv and stdin so the test can check where the token went.
+acli_home="$TMP/acli-home"
+mkdir -p "$acli_home/.local/bin"
+cat > "$acli_home/.local/bin/acli" <<'SH'
+#!/usr/bin/env sh
+printf '%s\n' "$*" > "$HOME/acli-argv"
+cat > "$HOME/acli-stdin"
+[ "$5" = good.atlassian.net ]
+SH
+chmod +x "$acli_home/.local/bin/acli"
+
+run_acli_step() {   # $1 = site; email and token are fixed
+  HOME="$acli_home" REPO_UNDER_TEST="$REPO" PATH=/usr/bin:/bin \
+    ATLASSIAN_CLI_SITE="$1" ATLASSIAN_CLI_EMAIL=me@example.com \
+    ATLASSIAN_CLI_API_TOKEN=s3cret \
+    bash -c '
+      set -euo pipefail
+      source "$REPO_UNDER_TEST/headless/setup/lib.sh"
+      source "$REPO_UNDER_TEST/headless/setup/47-acli.sh"
+    '
+}
+
+acli_out="$(run_acli_step good.atlassian.net 2>&1)"
+assert_equal "acli logs in to jira with the workspace site and email" \
+  "jira auth login --site good.atlassian.net --email me@example.com --token" \
+  "$(cat "$acli_home/acli-argv")"
+assert_equal "the acli token arrives on stdin" s3cret "$(cat "$acli_home/acli-stdin")"
+assert_contains "the acli login is logged" "acli: logged in to jira at good.atlassian.net" "$acli_out"
+
+if acli_out="$(run_acli_step bad.atlassian.net 2>&1)"; then
+  pass "a failed acli login does not abort install.sh"
+else
+  fail "a failed acli login does not abort install.sh"
+fi
+assert_contains "a failed acli login is logged" "acli: jira login to bad.atlassian.net failed" "$acli_out"
+
+rm -f "$acli_home/acli-argv"
+acli_out="$(run_acli_step "" 2>&1)"
+assert_path_absent "acli does not log in without ATLASSIAN_CLI_SITE" "$acli_home/acli-argv"
+assert_contains "the skipped acli login is logged" "skipping jira login" "$acli_out"
+
 summary

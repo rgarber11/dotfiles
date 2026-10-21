@@ -27,6 +27,12 @@ The Coder template owns CLIProxyAPI and the `gpt_code` launcher. Run
 `ai-auth cli-proxy status` for diagnostics. This repo deliberately does not
 install, configure, or supervise a second proxy in headless workspaces.
 
+`headless/setup/47-acli.sh` installs the Atlassian CLI (`acli`) into
+`~/.local/bin` from upstream's `latest` binary, with no sudo or apt repo, and
+`dotup` re-downloads it. Each start then runs `acli jira auth login` from
+`ATLASSIAN_CLI_SITE`, `ATLASSIAN_CLI_EMAIL` and `ATLASSIAN_CLI_API_TOKEN`,
+piping the token on stdin, and skips the login when any of the three is unset.
+
 T3 Code starts with the workspace: `headless/setup/60-t3code.sh` installs the
 nightly `t3` (`t3@nightly`) into `~/.local` with npm, replacing a stable build
 already there. Each start asks npm for the newest nightly and reinstalls when it
